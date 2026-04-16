@@ -56,7 +56,7 @@ body {
 .app-content {
     flex: 1;
     padding: 20px;
-    max-width: 600px;
+    max-width: 100%;
     margin: 0 auto;
     width: 100%;
     display: flex;
@@ -294,8 +294,8 @@ button:disabled {
 }
 
 .markdown-body {
-    font-size: 0.95rem;
-    line-height: 1.6;
+    font-size: 1.1rem;
+    line-height: 1.7;
 }
 
 .markdown-body p {

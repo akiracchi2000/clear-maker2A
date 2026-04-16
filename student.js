@@ -248,24 +248,55 @@ function renderThumbnails() {
     els.resultSection.classList.add('hidden');
 }
 
-// File Reader
-function readFile(file) {
-    return new Promise((resolve, reject) => {
+// File Reader & Image Processor
+async function readFile(file) {
+    const dataUrl = await new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = (e) => {
-            const dataUrl = e.target.result;
-            const splitIndex = dataUrl.indexOf(',');
-            const mimeType = dataUrl.substring(5, splitIndex).split(';')[0];
-            const base64Data = dataUrl.substring(splitIndex + 1);
-            resolve({ mimeType: mimeType, data: base64Data });
-        };
+        reader.onload = (e) => resolve(e.target.result);
         reader.onerror = reject;
         reader.readAsDataURL(file);
+    });
+    return await processImage(dataUrl);
+}
+
+// 汎用画像リサイズ・圧縮処理
+function processImage(dataUrl, maxWidth = 1000, quality = 0.7) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            let width = img.width;
+            let height = img.height;
+
+            if (width > maxWidth) {
+                height = Math.round((height * maxWidth) / width);
+                width = maxWidth;
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            const resultDataUrl = canvas.toDataURL('image/jpeg', quality);
+            const splitIndex = resultDataUrl.indexOf(',');
+            const mimeType = resultDataUrl.substring(5, splitIndex).split(';')[0];
+            const base64Data = resultDataUrl.substring(splitIndex + 1);
+            
+            console.log(`Image processed: ${img.width}x${img.height} -> ${width}x${height}, Quality: ${quality}`);
+            resolve({ mimeType, data: base64Data });
+        };
+        img.onerror = (err) => {
+            console.error('Image processing error:', err);
+            reject(err);
+        };
+        img.src = dataUrl;
     });
 }
 
 // Camera Functions
 async function openCamera() {
+    // 端末のネイティブファイル選択ではなく、再度ブラウザ上のカスタムカメラ（getUserMedia）を使用するように戻します
     // Check if getUserMedia is supported
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         console.warn('getUserMedia not supported, falling back to file input');
@@ -285,8 +316,10 @@ async function openCamera() {
 }
 
 async function startStream() {
+    // 既にカメラのストリームが有効な場合は、そのまま使い回す（毎回許可が出ないようにする）
     if (cameraState.stream) {
-        cameraState.stream.getTracks().forEach(track => track.stop());
+        els.cameraVideo.srcObject = cameraState.stream;
+        return;
     }
 
     const constraints = {
@@ -303,15 +336,16 @@ async function startStream() {
 }
 
 function stopCamera() {
-    if (cameraState.stream) {
-        cameraState.stream.getTracks().forEach(track => track.stop());
-        cameraState.stream = null;
-    }
-    els.cameraVideo.srcObject = null;
+    // 毎回破棄（stop）すると次に開くときに再度許可が求められるため、ストリームは維持し画面だけ隠す
     els.cameraModal.classList.add('hidden');
 }
 
 async function switchCamera() {
+    // 切り替え時のみ一度ストリームを破棄して取り直す
+    if (cameraState.stream) {
+        cameraState.stream.getTracks().forEach(track => track.stop());
+        cameraState.stream = null;
+    }
     cameraState.facingMode = cameraState.facingMode === 'user' ? 'environment' : 'user';
     try {
         await startStream();
@@ -325,17 +359,30 @@ function takePhoto() {
     const video = els.cameraVideo;
     const canvas = els.cameraCanvas;
     
-    // Set canvas dimensions to match video stream
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    // リサイズ計算（横幅最大1000px）
+    let width = video.videoWidth;
+    let height = video.videoHeight;
+    const maxWidth = 1000;
+
+    if (width > maxWidth) {
+        height = Math.round((height * maxWidth) / width);
+        width = maxWidth;
+    }
+
+    // キャンバスをリサイズ後のサイズに設定
+    canvas.width = width;
+    canvas.height = height;
     
     const context = canvas.getContext('2d');
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
     
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+    // JPEG品質0.7で圧縮
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
     const splitIndex = dataUrl.indexOf(',');
     const base64Data = dataUrl.substring(splitIndex + 1);
     
+    console.log(`Photo taken & resized: ${video.videoWidth}x${video.videoHeight} -> ${width}x${height}`);
+
     state.images.push({
         mimeType: 'image/jpeg',
         data: base64Data
@@ -365,19 +412,31 @@ async function evaluateAnswer() {
     els.loadingIndicator.classList.remove('hidden');
     els.resultSection.classList.add('hidden');
 
+    // 0秒〜5秒（5000ミリ秒）の間でランダムな待ち時間を生成して通信を分散させる（アクセス集中対策）
+    const randomDelay = Math.floor(Math.random() * 5000);
+    console.log(`Waiting for random delay: ${randomDelay}ms`);
+    await new Promise(resolve => setTimeout(resolve, randomDelay));
+
     try {
         const prompt = `
 提供された画像を生徒の解答として添削してください。
-処理を極力軽く（速く）するため、挨拶や詳しい解説などは一切省略してください。
+合格・再チャレンジの判定基準として、解答した問題数の8割以上が正解であれば「合格！」、それに満たない場合は「再チャレンジ！」としてください。
+【重要】生徒が途中式から書き始めている場合があるため、最初の式が問題文と完全に一致していなくても「問題と不一致である」という指摘はしないでください。計算の途中として正しければ正解として扱ってください。
+処理を軽くするため、挨拶や無関係な話題は一切省略してください。
 
-以下のフォーマットに沿って3行だけで出力してください。
+以下のフォーマットに沿って出力してください。
 
 [判定]
 （「合格！」または「再チャレンジ！」のどちらかのみ）
 
 [詳細]
-正誤: （正解 か 不正解）
-一言: （誤答の理由やアドバイスなどを20文字程度で簡潔に）
+結果: （例: 5問中4問正解など）
+
+読み取った解答:
+（AIがどのように生徒の解答を読み取ったか、テキストで示してください。数式を出力する際は必ずKaTeX形式（インラインは $ $、ブロックは $$ $$）を用いてください。複数ある場合は箇条書きなどで見やすく整理してください）
+
+フィードバック:
+（間違えた問題がある場合、まず生徒が間違えた原因をコメントしてください。その後、途中式を含めた正しい解答例を出力して示してください。ここでも数式には必ずKaTeX形式を用いてください。全問正解の場合は簡潔なお祝いの言葉を記載してください）
 `;
 
         const payload = {
@@ -414,10 +473,10 @@ async function evaluateAnswer() {
     } catch (err) {
         console.error(err);
         alert('エラーが発生しました: ' + err.message);
-        els.evaluateBtn.disabled = false;
         els.evaluateBtn.classList.remove('hidden');
     } finally {
         els.loadingIndicator.classList.add('hidden');
+        els.evaluateBtn.disabled = false;
     }
 }
 
@@ -448,8 +507,26 @@ function displayResult(text) {
         els.resultBadge.textContent = '💪 再チャレンジ！';
     }
 
-    // Markdown パース
-    els.resultContent.innerHTML = marked.parse(detailText);
+    // Markdown パース (KaTeXの\\などが消えないようにバックスラッシュをエスケープ)
+    const processedText = detailText.replace(/\\/g, '\\\\');
+    els.resultContent.innerHTML = marked.parse(processedText, { breaks: true });
+
+    // KaTeX(数式)レンダリング
+    if (typeof renderMathInElement === 'function') {
+        try {
+            renderMathInElement(els.resultContent, {
+                delimiters: [
+                    {left: "$$", right: "$$", display: true},
+                    {left: "\\[", right: "\\]", display: true},
+                    {left: "$", right: "$", display: false},
+                    {left: "\\(", right: "\\)", display: false}
+                ],
+                throwOnError: false
+            });
+        } catch (e) {
+            console.error("KaTeX rendering error:", e);
+        }
+    }
 
     els.resultSection.classList.remove('hidden');
 }
