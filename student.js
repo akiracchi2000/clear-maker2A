@@ -420,14 +420,14 @@ async function evaluateAnswer() {
     try {
         const prompt = `
 提供された画像を生徒の解答として添削してください。
-合格・再チャレンジの判定基準として、解答した問題数の8割以上が正解であれば「合格！」、それに満たない場合は「再チャレンジ！」としてください。
+合格・再チャレンジの判定基準として、解答した問題数の8割以上が正解であれば「レベルアップして次の問題へ！」、それに満たない場合は「レベルキープで次の問題へ！」としてください。
 【重要】生徒が途中式から書き始めている場合があるため、最初の式が問題文と完全に一致していなくても「問題と不一致である」という指摘はしないでください。計算の途中として正しければ正解として扱ってください。
 処理を軽くするため、挨拶や無関係な話題は一切省略してください。
 
 以下のフォーマットに沿って出力してください。
 
 [判定]
-（「合格！」または「再チャレンジ！」のどちらかのみ）
+（「レベルアップして次の問題へ！」または「レベルキープで次の問題へ！」のどちらかのみ）
 
 [詳細]
 結果: （例: 5問中4問正解など）
@@ -498,16 +498,16 @@ function displayResult(text) {
         }
     } else {
         // フォールバック: テキスト内に合格が含まれるか
-        if (text.includes('合格')) badgeText = '合格！';
-        else if (text.includes('再チャレンジ')) badgeText = '再チャレンジ！';
+        if (text.includes('レベルアップ')) badgeText = 'レベルアップして次の問題へ！';
+        else if (text.includes('レベルキープ')) badgeText = 'レベルキープで次の問題へ！';
     }
 
-    if (badgeText.includes('合格')) {
+    if (badgeText.includes('レベルアップ')) {
         els.resultBadge.className = 'result-badge pass';
-        els.resultBadge.textContent = '🎉 合格！';
+        els.resultBadge.textContent = '🎉 レベルアップして次の問題へ！';
     } else {
         els.resultBadge.className = 'result-badge retry';
-        els.resultBadge.textContent = '💪 再チャレンジ！';
+        els.resultBadge.textContent = '💪 レベルキープで次の問題へ！';
     }
 
     // Markdown パース (KaTeXの\\などが消えないようにバックスラッシュをエスケープ)
