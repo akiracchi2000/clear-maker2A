@@ -419,7 +419,11 @@ async function evaluateAnswer() {
 
     try {
         const prompt = `
-提供された画像を生徒の解答として添削してください。
+【重要・最優先】最初に、指定された問題番号と提供された画像に書かれている問題が一致しているか必ず確認してください。
+もし全く異なる問題の解答であると判断した場合は、以下の添削やフォーマット出力は一切行わず、以下の文字列のみを出力して処理を終了してください。
+指定した問題が間違っています
+
+上記に該当しない場合は、提供された画像を生徒の解答として添削してください。
 合格・再チャレンジの判定基準として、解答した問題数の8割以上が正解であれば「レベルアップして次の問題へ！」、それに満たない場合は「同じレベルの次の問題へ！」としてください。
 【重要】生徒が途中式から書き始めている場合があるため、最初の式が問題文と完全に一致していなくても「問題と不一致である」という指摘はしないでください。計算の途中として正しければ正解として扱ってください。
 処理を軽くするため、挨拶や無関係な話題は一切省略してください。
@@ -484,6 +488,14 @@ async function evaluateAnswer() {
 }
 
 function displayResult(text) {
+    if (text.includes("指定した問題が間違っています")) {
+        els.resultBadge.className = 'result-badge retry';
+        els.resultBadge.textContent = '⚠️ 指定した問題が間違っています';
+        els.resultContent.innerHTML = '<p>アップロードした画像と、選択した問題が一致していないようです。<br>問題番号と画像を確認して、もう一度やり直してください。</p>';
+        els.resultSection.classList.remove('hidden');
+        return;
+    }
+
     let badgeText = "判定不能";
     let detailText = text;
     let badgeClass = "";
