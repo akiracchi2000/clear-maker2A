@@ -493,6 +493,7 @@ function displayResult(text) {
         els.resultBadge.textContent = '⚠️ 指定した問題が間違っています';
         els.resultContent.innerHTML = '<p>アップロードした画像と、選択した問題が一致していないようです。<br>問題番号と画像を確認して、もう一度やり直してください。</p>';
         els.resultSection.classList.remove('hidden');
+        els.evaluateBtn.classList.remove('hidden');
         return;
     }
 
