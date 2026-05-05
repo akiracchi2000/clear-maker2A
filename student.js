@@ -1,11 +1,10 @@
 // Configuration
-// 同じディレクトリのbackend_GAS.gsのURL
 const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbwT8ED1qE-4gqRGM-y4xup-K9lSt3S7CanT9n24OIpT5sI7m4kkb09mOG5PHX4bjlPi/exec';
 
 // State
 let state = {
     studentId: '',
-    images: [], // Array of { mimeType, data }
+    images: [],
 };
 let problemData = {};
 
@@ -29,13 +28,17 @@ const els = {
 
     evaluateBtn: document.getElementById('evaluate-btn'),
     loadingIndicator: document.getElementById('loading-indicator'),
-    
+
     resultSection: document.getElementById('result-section'),
     resultBadge: document.getElementById('result-badge'),
     resultContent: document.getElementById('result-content'),
+    todaySummaryBtn: document.getElementById('today-summary-btn'),
+    todaySummarySection: document.getElementById('today-summary-section'),
+    todaySummaryCauses: document.getElementById('today-summary-causes'),
+    todaySummaryStatus: document.getElementById('today-summary-status'),
+    todaySummaryList: document.getElementById('today-summary-list'),
     newQuestionBtn: document.getElementById('new-question-btn'),
 
-    // Camera Modal Elements
     cameraModal: document.getElementById('camera-modal'),
     cameraVideo: document.getElementById('camera-video'),
     cameraCanvas: document.getElementById('camera-canvas'),
@@ -44,16 +47,14 @@ const els = {
     cameraCloseBtn: document.getElementById('camera-close-btn'),
 };
 
-// Camera State
 let cameraState = {
     stream: null,
-    facingMode: 'environment', // 'user' or 'environment'
+    facingMode: 'environment',
 };
 
-// Initialization
 function init() {
     state.studentId = localStorage.getItem('student_id') || '';
-    
+
     if (!state.studentId) {
         els.setupModal.classList.remove('hidden');
     } else {
@@ -70,29 +71,26 @@ async function fetchAndSetupProblems() {
     els.problemSelect.disabled = true;
 
     try {
-        const payload = { action: "getProblems" };
         const response = await fetch(GAS_API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify(payload)
+            body: JSON.stringify({ action: 'getProblems' }),
         });
         const json = await response.json();
-        
-        if (json.status === "success" && json.data) {
-            problemData = json.data;
-            
-            // Populate roundSelect
-            els.roundSelect.innerHTML = '<option value="">-- 回を選択 --</option>';
-            for (const round in problemData) {
-                const opt = document.createElement('option');
-                opt.value = round;
-                opt.textContent = round;
-                els.roundSelect.appendChild(opt);
-            }
-            els.roundSelect.disabled = false;
-        } else {
-            throw new Error((json.error || "データ取得失敗"));
+
+        if (json.status !== 'success' || !json.data) {
+            throw new Error(json.error || 'データ取得に失敗しました');
         }
+
+        problemData = json.data;
+        els.roundSelect.innerHTML = '<option value="">-- 回を選択 --</option>';
+        Object.keys(problemData).forEach(round => {
+            const opt = document.createElement('option');
+            opt.value = round;
+            opt.textContent = round;
+            els.roundSelect.appendChild(opt);
+        });
+        els.roundSelect.disabled = false;
     } catch (e) {
         console.error(e);
         els.roundSelect.innerHTML = '<option value="">-- 読込失敗 --</option>';
@@ -100,17 +98,16 @@ async function fetchAndSetupProblems() {
 }
 
 function updateUserInfo() {
-    if (state.studentId) {
-        els.displayStudentId.textContent = state.studentId;
-        els.userInfo.classList.remove('hidden');
-    }
+    if (!state.studentId) return;
+    els.displayStudentId.textContent = state.studentId;
+    els.userInfo.classList.remove('hidden');
 }
 
 function setupEventListeners() {
-    // Cascaded Dropdown Logic
     els.roundSelect.addEventListener('change', (e) => {
         const round = e.target.value;
         els.problemSelect.innerHTML = '<option value="">-- 問題を選択 --</option>';
+
         if (round && problemData[round]) {
             problemData[round].forEach(p => {
                 const opt = document.createElement('option');
@@ -124,17 +121,17 @@ function setupEventListeners() {
         }
     });
 
-    // Modal
     els.saveSetupBtn.addEventListener('click', () => {
         const id = els.studentIdInput.value.trim();
-        if (id) {
-            state.studentId = id;
-            localStorage.setItem('student_id', id);
-            updateUserInfo();
-            els.setupModal.classList.add('hidden');
-        } else {
+        if (!id) {
             alert('生徒番号を入力してください。');
+            return;
         }
+
+        state.studentId = id;
+        localStorage.setItem('student_id', id);
+        updateUserInfo();
+        els.setupModal.classList.add('hidden');
     });
 
     els.settingsBtn.addEventListener('click', () => {
@@ -142,31 +139,19 @@ function setupEventListeners() {
         els.setupModal.classList.remove('hidden');
     });
 
-    // モーダルの外側（背景）をクリックした時に閉じる
     els.setupModal.addEventListener('click', (e) => {
-        // e.target がモーダルの背景部分そのものである場合のみ
-        if (e.target === els.setupModal) {
-            // すでに生徒番号が登録されている場合のみ閉じられる（初回強制入力用）
-            if (state.studentId) {
-                els.setupModal.classList.add('hidden');
-            }
+        if (e.target === els.setupModal && state.studentId) {
+            els.setupModal.classList.add('hidden');
         }
     });
 
-    // Upload
-    els.uploadBtn.addEventListener('click', () => {
-        console.log('Upload button clicked');
-        openCamera();
-    });
-    els.addMoreBtn.addEventListener('click', () => {
-        console.log('Add more button clicked');
-        openCamera();
-    });
-
-    // Camera Modal Events
+    els.uploadBtn.addEventListener('click', openCamera);
+    els.addMoreBtn.addEventListener('click', openCamera);
     els.cameraShutterBtn.addEventListener('click', takePhoto);
     els.cameraSwitchBtn.addEventListener('click', switchCamera);
     els.cameraCloseBtn.addEventListener('click', stopCamera);
+    els.evaluateBtn.addEventListener('click', evaluateAnswer);
+    els.todaySummaryBtn.addEventListener('click', showTodaySummary);
 
     els.clearAllBtn.addEventListener('click', () => {
         state.images = [];
@@ -178,43 +163,39 @@ function setupEventListeners() {
         const files = e.target.files;
         if (!files || files.length === 0) return;
 
+        const originalText = els.uploadBtn.innerHTML;
         try {
             els.uploadBtn.disabled = true;
-            const originalText = els.uploadBtn.innerHTML;
             els.uploadBtn.innerHTML = '画像を処理中...';
-            
+
             for (let i = 0; i < files.length; i++) {
                 const result = await readFile(files[i]);
                 state.images.push(result);
             }
-            
-            els.uploadBtn.disabled = false;
-            els.uploadBtn.innerHTML = originalText;
-            els.cameraInput.value = ''; // Reset input
-            
+
+            els.cameraInput.value = '';
             renderThumbnails();
         } catch (error) {
-            els.uploadBtn.disabled = false;
             alert('画像の読み込みに失敗しました。');
             console.error(error);
+        } finally {
+            els.uploadBtn.disabled = false;
+            els.uploadBtn.innerHTML = originalText;
         }
     });
 
-    // Evaluate
-    els.evaluateBtn.addEventListener('click', evaluateAnswer);
-
-    // Reset
     els.newQuestionBtn.addEventListener('click', () => {
         state.images = [];
         els.cameraInput.value = '';
         renderThumbnails();
         els.resultSection.classList.add('hidden');
+        clearTodaySummary();
     });
 }
 
 function renderThumbnails() {
     els.imagePreviewList.innerHTML = '';
-    
+
     if (state.images.length === 0) {
         els.previewContainer.classList.add('hidden');
         els.evaluateBtn.classList.add('hidden');
@@ -228,10 +209,11 @@ function renderThumbnails() {
 
         const imgEl = document.createElement('img');
         imgEl.src = `data:${img.mimeType};base64,${img.data}`;
-        
+
         const removeBtn = document.createElement('button');
         removeBtn.className = 'remove-thumb-btn';
-        removeBtn.innerHTML = '×';
+        removeBtn.type = 'button';
+        removeBtn.textContent = '×';
         removeBtn.onclick = () => {
             state.images.splice(index, 1);
             renderThumbnails();
@@ -248,7 +230,6 @@ function renderThumbnails() {
     els.resultSection.classList.add('hidden');
 }
 
-// File Reader & Image Processor
 async function readFile(file) {
     const dataUrl = await new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -256,10 +237,9 @@ async function readFile(file) {
         reader.onerror = reject;
         reader.readAsDataURL(file);
     });
-    return await processImage(dataUrl);
+    return processImage(dataUrl);
 }
 
-// 汎用画像リサイズ・圧縮処理
 function processImage(dataUrl, maxWidth = 1000, quality = 0.7) {
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -282,24 +262,16 @@ function processImage(dataUrl, maxWidth = 1000, quality = 0.7) {
             const splitIndex = resultDataUrl.indexOf(',');
             const mimeType = resultDataUrl.substring(5, splitIndex).split(';')[0];
             const base64Data = resultDataUrl.substring(splitIndex + 1);
-            
-            console.log(`Image processed: ${img.width}x${img.height} -> ${width}x${height}, Quality: ${quality}`);
+
             resolve({ mimeType, data: base64Data });
         };
-        img.onerror = (err) => {
-            console.error('Image processing error:', err);
-            reject(err);
-        };
+        img.onerror = reject;
         img.src = dataUrl;
     });
 }
 
-// Camera Functions
 async function openCamera() {
-    // 端末のネイティブファイル選択ではなく、再度ブラウザ上のカスタムカメラ（getUserMedia）を使用するように戻します
-    // Check if getUserMedia is supported
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        console.warn('getUserMedia not supported, falling back to file input');
         els.cameraInput.click();
         return;
     }
@@ -309,14 +281,12 @@ async function openCamera() {
         await startStream();
     } catch (err) {
         console.error('Error opening camera:', err);
-        // Fallback to native file input if camera fails
         els.cameraModal.classList.add('hidden');
         els.cameraInput.click();
     }
 }
 
 async function startStream() {
-    // 既にカメラのストリームが有効な場合は、そのまま使い回す（毎回許可が出ないようにする）
     if (cameraState.stream) {
         els.cameraVideo.srcObject = cameraState.stream;
         return;
@@ -326,9 +296,9 @@ async function startStream() {
         video: {
             facingMode: cameraState.facingMode,
             width: { ideal: 1920 },
-            height: { ideal: 1080 }
+            height: { ideal: 1080 },
         },
-        audio: false
+        audio: false,
     };
 
     cameraState.stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -336,17 +306,17 @@ async function startStream() {
 }
 
 function stopCamera() {
-    // 毎回破棄（stop）すると次に開くときに再度許可が求められるため、ストリームは維持し画面だけ隠す
     els.cameraModal.classList.add('hidden');
 }
 
 async function switchCamera() {
-    // 切り替え時のみ一度ストリームを破棄して取り直す
     if (cameraState.stream) {
         cameraState.stream.getTracks().forEach(track => track.stop());
         cameraState.stream = null;
     }
+
     cameraState.facingMode = cameraState.facingMode === 'user' ? 'environment' : 'user';
+
     try {
         await startStream();
     } catch (err) {
@@ -358,8 +328,6 @@ async function switchCamera() {
 function takePhoto() {
     const video = els.cameraVideo;
     const canvas = els.cameraCanvas;
-    
-    // リサイズ計算（横幅最大1000px）
     let width = video.videoWidth;
     let height = video.videoHeight;
     const maxWidth = 1000;
@@ -369,32 +337,26 @@ function takePhoto() {
         width = maxWidth;
     }
 
-    // キャンバスをリサイズ後のサイズに設定
     canvas.width = width;
     canvas.height = height;
-    
-    const context = canvas.getContext('2d');
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-    
-    // JPEG品質0.7で圧縮
+    canvas.getContext('2d').drawImage(video, 0, 0, width, height);
+
     const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
     const splitIndex = dataUrl.indexOf(',');
     const base64Data = dataUrl.substring(splitIndex + 1);
-    
-    console.log(`Photo taken & resized: ${video.videoWidth}x${video.videoHeight} -> ${width}x${height}`);
 
     state.images.push({
         mimeType: 'image/jpeg',
-        data: base64Data
+        data: base64Data,
     });
-    
+
     renderThumbnails();
     stopCamera();
 }
 
-// Main Logic
 async function evaluateAnswer() {
     if (state.images.length === 0) return;
+
     if (!state.studentId) {
         alert('生徒番号の登録が必要です。');
         els.setupModal.classList.remove('hidden');
@@ -412,57 +374,55 @@ async function evaluateAnswer() {
     els.loadingIndicator.classList.remove('hidden');
     els.resultSection.classList.add('hidden');
 
-    // 0秒〜5秒（5000ミリ秒）の間でランダムな待ち時間を生成して通信を分散させる（アクセス集中対策）
     const randomDelay = Math.floor(Math.random() * 5000);
-    console.log(`Waiting for random delay: ${randomDelay}ms`);
     await new Promise(resolve => setTimeout(resolve, randomDelay));
 
     try {
         const prompt = `
-【重要・最優先】最初に、指定された問題番号と提供された画像に書かれている問題が一致しているか必ず確認してください。
-もし全く異なる問題の解答であると判断した場合は、以下の添削やフォーマット出力は一切行わず、以下の文字列のみを出力して処理を終了してください。
+【重要】
+最初に、指定された問題番号と画像内の問題が一致しているか確認してください。
+もし全く異なる問題の解答であると判断した場合は、添削やフォーマット出力は行わず、次の文字列のみを出力してください。
 指定した問題が間違っています
 
-上記に該当しない場合は、提供された画像を生徒の解答として添削してください。
-合格・再チャレンジの判定基準として、解答した問題数の8割以上が正解であれば「レベルアップして次の問題へ！」、それに満たない場合は「同じレベルの次の問題へ！」としてください。
-【重要】生徒が途中式から書き始めている場合があるため、最初の式が問題文と完全に一致していなくても「問題と不一致である」という指摘はしないでください。計算の途中として正しければ正解として扱ってください。
-処理を軽くするため、挨拶や無関係な話題は一切省略してください。
+問題が一致している場合は、生徒の解答を添削してください。
+合格判定は、解答した問題数の8割以上が正解なら「レベルアップして次の問題へ！」、それ以外なら「同じレベルの次の問題へ！」としてください。
+生徒が途中式から書き始めている場合も、計算過程として正しければ正解として扱ってください。
+雑談や無関係な話題は省略してください。
 
-以下のフォーマットに沿って出力してください。
-
+以下のフォーマットで出力してください。
 [判定]
-（「レベルアップして次の問題へ！」または「同じレベルの次の問題へ！」のどちらかのみ）
+「レベルアップして次の問題へ！」または「同じレベルの次の問題へ！」のどちらかのみ
 
 [詳細]
-結果: （例: 5問中4問正解など）
-
+結果: 例 5問中4問正解
 読み取った解答と正誤:
-（各問題に対して、以下の形式で正誤を明記してください。**途中式や解説は一切含めず、答えのみ**を記載してください）
-形式例：
-(1) 正解： [答え]
-(2) 不正解： [答え]
+各問題について、途中式や解説は省き、答えと正誤のみを書いてください。
+形式例:
+(1) 正解: [答え]
+(2) 不正解: [答え]
 
 フィードバック:
-（不正解の問題がある場合のみ、問題番号を明記して、間違えた原因と途中式を含む正解例を記載してください。全問正解の場合は簡潔なお祝いの言葉のみで結構です。数式には必ずKaTeX形式を用いてください）
-`;
+不正解の問題がある場合のみ、問題番号、間違えた原因、正しい考え方を簡潔に書いてください。
+原因には、可能なら「たすき掛け」「因数分解」「平方完成」「判別式」「場合分け」など、復習すべきテーマ名を必ず含めてください。
+全問正解の場合は、短いお祝いの言葉のみで構いません。
+数式はKaTeX形式で書いてください。`;
 
         const payload = {
-            apiKey: "server", // サーバー側キーを使用するフラグ
+            apiKey: 'server',
             isStudentApp: true,
-            subject: "other",
-            problemId: problemId,
+            subject: 'other',
+            problemId,
             userPrompt: prompt,
             images: {
-                student: state.images
-            }
+                student: state.images,
+            },
         };
 
         const response = await fetch(GAS_API_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'text/plain' }, // Avoid CORS preflight on GAS sometimes
-            body: JSON.stringify(payload)
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(payload),
         });
-
         const data = await response.json();
 
         if (data.error) {
@@ -470,13 +430,8 @@ async function evaluateAnswer() {
         }
 
         const aiResponse = data.candidates[0].content.parts[0].text;
-        
-        // パース
         displayResult(aiResponse);
-
-        // GASへ保存
-        sendLogToGAS(aiResponse);
-
+        await sendLogToGAS(aiResponse);
     } catch (err) {
         console.error(err);
         alert('エラーが発生しました: ' + err.message);
@@ -488,85 +443,250 @@ async function evaluateAnswer() {
 }
 
 function displayResult(text) {
-    if (text.includes("指定した問題が間違っています")) {
+    if (text.includes('指定した問題が間違っています')) {
         els.resultBadge.className = 'result-badge retry';
-        els.resultBadge.textContent = '⚠️ 指定した問題が間違っています';
-        els.resultContent.innerHTML = '<p>アップロードした画像と、選択した問題が一致していないようです。<br>問題番号と画像を確認して、もう一度やり直してください。</p>';
+        els.resultBadge.textContent = '指定した問題が間違っています';
+        els.resultContent.innerHTML = '<p>アップロードした画像と選択した問題が一致していないようです。問題番号と画像を確認して、もう一度やり直してください。</p>';
         els.resultSection.classList.remove('hidden');
         els.evaluateBtn.classList.remove('hidden');
         return;
     }
 
-    let badgeText = "判定不能";
+    let badgeText = '判定不明';
     let detailText = text;
-    let badgeClass = "";
 
-    // [判定] と [詳細] で分割を試みる
-    const badgeMatch = text.match(/\\[判定\\]\\s*([^\\n]+)/);
+    const badgeMatch = text.match(/\[判定\]\s*([^\n]+)/);
     if (badgeMatch) {
         badgeText = badgeMatch[1].trim();
-        const detailSplit = text.split(/\\[詳細\\]/);
+        const detailSplit = text.split(/\[詳細\]/);
         if (detailSplit.length > 1) {
             detailText = detailSplit[1].trim();
         }
-    } else {
-        // フォールバック: テキスト内に合格が含まれるか
-        if (text.includes('レベルアップ')) badgeText = 'レベルアップして次の問題へ！';
-        else if (text.includes('同じレベル')) badgeText = '同じレベルの次の問題へ！';
+    } else if (text.includes('レベルアップ')) {
+        badgeText = 'レベルアップして次の問題へ！';
+    } else if (text.includes('同じレベル')) {
+        badgeText = '同じレベルの次の問題へ！';
     }
 
     if (badgeText.includes('レベルアップ')) {
         els.resultBadge.className = 'result-badge pass';
-        els.resultBadge.textContent = '🎉 レベルアップして次の問題へ！';
+        els.resultBadge.textContent = 'レベルアップして次の問題へ！';
     } else {
         els.resultBadge.className = 'result-badge retry';
-        els.resultBadge.textContent = '💪 同じレベルの次の問題へ！';
+        els.resultBadge.textContent = '同じレベルの次の問題へ！';
     }
 
-    // Markdown パース (KaTeXの\\などが消えないようにバックスラッシュをエスケープ)
     const processedText = detailText.replace(/\\/g, '\\\\');
     els.resultContent.innerHTML = marked.parse(processedText, { breaks: true });
-
-    // KaTeX(数式)レンダリング
-    if (typeof renderMathInElement === 'function') {
-        try {
-            renderMathInElement(els.resultContent, {
-                delimiters: [
-                    {left: "$$", right: "$$", display: true},
-                    {left: "\\[", right: "\\]", display: true},
-                    {left: "$", right: "$", display: false},
-                    {left: "\\(", right: "\\)", display: false}
-                ],
-                throwOnError: false
-            });
-        } catch (e) {
-            console.error("KaTeX rendering error:", e);
-        }
-    }
+    renderMath(els.resultContent);
 
     els.resultSection.classList.remove('hidden');
+    clearTodaySummary();
 }
 
 async function sendLogToGAS(resultText) {
     try {
         const payload = {
-            action: "saveResult",
+            action: 'saveResult',
             studentId: state.studentId,
-            problemId: els.problemSelect.value || "",
-            resultText: resultText
+            problemId: els.problemSelect.value || '',
+            resultText,
         };
-        
-        // スプレッドシート側のGASの提出履歴に保存
-        fetch(GAS_API_URL, {
+
+        return fetch(GAS_API_URL, {
             method: 'POST',
             mode: 'no-cors',
             headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(payload),
         });
     } catch (e) {
         console.error('Failed to save result to GAS', e);
     }
 }
 
-// 起動
+async function showTodaySummary() {
+    if (!state.studentId) {
+        alert('生徒番号を登録してください。');
+        els.setupModal.classList.remove('hidden');
+        return;
+    }
+
+    els.todaySummaryBtn.disabled = true;
+    els.todaySummarySection.classList.remove('hidden');
+    els.todaySummaryStatus.textContent = '今日の結果を確認しています...';
+    els.todaySummaryList.innerHTML = '';
+
+    try {
+        const response = await fetch(GAS_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({
+                action: 'getTodayReview',
+                studentId: state.studentId,
+            }),
+        });
+        const json = await response.json();
+
+        if (json.error) {
+            throw new Error(json.error);
+        }
+
+        renderTodaySummary(json);
+    } catch (e) {
+        console.error(e);
+        els.todaySummaryStatus.textContent = '今日のまとめを取得できませんでした。少し時間を置いてもう一度試してください。';
+    } finally {
+        els.todaySummaryBtn.disabled = false;
+    }
+}
+
+function renderTodaySummary(data) {
+    const retryIds = data.retryProblemIds || [];
+    const answeredIds = data.answeredProblemIds || [];
+    const retryCauses = data.retryCauses || [];
+    const items = data.reviewItems || [];
+
+    if (answeredIds.length === 0) {
+        els.todaySummaryStatus.textContent = `${data.date || '今日'}に記録された添削結果はまだありません。`;
+        els.todaySummaryCauses.innerHTML = '';
+        els.todaySummaryList.innerHTML = '';
+        return;
+    }
+
+    if (retryIds.length === 0) {
+        els.todaySummaryStatus.textContent = '今日の添削結果に誤答は見つかりませんでした。解き直し候補はありません。';
+        els.todaySummaryCauses.innerHTML = '';
+        els.todaySummaryList.innerHTML = '';
+        return;
+    }
+
+    els.todaySummaryStatus.textContent = '';
+    els.todaySummaryCauses.innerHTML = '';
+    els.todaySummaryList.innerHTML = '';
+    renderRetryCauses(retryCauses);
+
+    if (items.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'today-summary-empty';
+        empty.textContent = '該当する問題文が見つかりませんでした。';
+        els.todaySummaryList.appendChild(empty);
+        return;
+    }
+
+    items.forEach(item => {
+        const card = document.createElement('article');
+        card.className = 'today-summary-card';
+
+        const numbers = document.createElement('div');
+        numbers.className = 'today-summary-numbers';
+        const chip = document.createElement('span');
+        chip.textContent = item.displayLabel || formatReviewProblemLabel([item.numberA, item.numberB, item.numberC, item.numberD]);
+        numbers.appendChild(chip);
+
+        const question = document.createElement('div');
+        question.className = 'today-summary-question markdown-body';
+        question.textContent = item.question || '';
+
+        card.appendChild(numbers);
+        if (item.themes && item.themes.length > 0) {
+            const themes = document.createElement('div');
+            themes.className = 'today-summary-themes';
+            themes.textContent = `テーマ: ${item.themes.join(' / ')}`;
+            card.appendChild(themes);
+        }
+        card.appendChild(question);
+        els.todaySummaryList.appendChild(card);
+    });
+
+    renderMath(els.todaySummaryList);
+}
+
+function renderRetryCauses(retryCauses) {
+    if (!retryCauses || retryCauses.length === 0) return;
+
+    const causeBox = document.createElement('section');
+    causeBox.className = 'today-summary-causes';
+
+    const title = document.createElement('h4');
+    title.textContent = '今回のつまづき';
+    causeBox.appendChild(title);
+
+    retryCauses.forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'today-summary-cause';
+
+        const cause = document.createElement('span');
+        cause.textContent = shortenSummaryText(item.cause || '誤答理由を確認', 20);
+
+        row.appendChild(cause);
+        causeBox.appendChild(row);
+    });
+
+    els.todaySummaryCauses.appendChild(causeBox);
+}
+
+function formatReviewProblemNumber(value) {
+    const text = normalizeProblemNumberText(value);
+    if (!text) return '-';
+
+    const match = text.match(/^(\d)(\d)(\d)(.*)$/);
+    if (!match) return text;
+
+    const chapter = Number(match[1]);
+    const exercise = Number(match[2]);
+    const problem = Number(match[3]);
+    const suffix = match[4] || '';
+    return `第${chapter}章演習問題${exercise}-${problem}${suffix}`;
+}
+
+function shortenSummaryText(value, maxLength) {
+    const text = String(value || '').trim();
+    if (!text) return '';
+    return text.length > maxLength ? `${text.substring(0, maxLength)}...` : text;
+}
+
+function formatReviewProblemLabel(numbers) {
+    const parts = (numbers || []).map(value => normalizeProblemNumberText(value)).filter(Boolean);
+    if (parts.length >= 3 && /^\d+$/.test(parts[0]) && /^\d+$/.test(parts[1]) && /^\d+$/.test(parts[2])) {
+        return `第${Number(parts[0])}章演習問題${Number(parts[1])}-${Number(parts[2])}${parts[3] || ''}`;
+    }
+
+    return formatReviewProblemNumber(parts.join(''));
+}
+
+function normalizeProblemNumberText(value) {
+    return String(value || '')
+        .trim()
+        .replace(/[０-９]/g, char => String.fromCharCode(char.charCodeAt(0) - 0xFEE0))
+        .replace(/[（]/g, '(')
+        .replace(/[）]/g, ')')
+        .replace(/\.0$/, '')
+        .replace(/\s+/g, '');
+}
+
+function renderMath(element) {
+    if (typeof renderMathInElement !== 'function') return;
+
+    try {
+        renderMathInElement(element, {
+            delimiters: [
+                { left: '$$', right: '$$', display: true },
+                { left: '\\[', right: '\\]', display: true },
+                { left: '$', right: '$', display: false },
+                { left: '\\(', right: '\\)', display: false },
+            ],
+            throwOnError: false,
+        });
+    } catch (e) {
+        console.error('KaTeX rendering error:', e);
+    }
+}
+
+function clearTodaySummary() {
+    els.todaySummarySection.classList.add('hidden');
+    els.todaySummaryCauses.innerHTML = '';
+    els.todaySummaryStatus.textContent = '';
+    els.todaySummaryList.innerHTML = '';
+}
+
 init();
