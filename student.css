@@ -265,25 +265,25 @@ button:disabled {
 
 .result-badge {
     text-align: center;
-    font-size: 2.5rem;
-    font-weight: 900;
-    padding: 30px 20px;
-    border-radius: var(--radius-lg);
-    margin-bottom: 30px;
-    box-shadow: 0 10px 20px -5px rgba(0,0,0,0.1);
-    letter-spacing: 2px;
+    font-size: 1.45rem;
+    font-weight: 800;
+    padding: 16px 18px;
+    border-radius: var(--radius-md);
+    margin-bottom: 18px;
+    box-shadow: 0 6px 12px -6px rgba(0,0,0,0.18);
+    letter-spacing: 0;
 }
 
 .result-badge.pass {
     background: linear-gradient(135deg, #10b981, #059669);
     color: white;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.18);
 }
 
 .result-badge.retry {
     background: linear-gradient(135deg, #ef4444, #dc2626);
     color: white;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.18);
 }
 
 .result-details h3 {
@@ -322,6 +322,16 @@ button:disabled {
     margin-bottom: 10px;
 }
 
+.summary-brand {
+    display: inline-block;
+    font-style: italic;
+    font-weight: 900;
+    background: linear-gradient(135deg, #2563eb, #7c3aed, #db2777);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
 .today-summary-status {
     color: var(--text-secondary);
     font-size: 0.95rem;
@@ -338,6 +348,44 @@ button:disabled {
     border-radius: var(--radius-md);
     background: var(--bg-primary);
     padding: 14px;
+}
+
+.problem-display {
+    margin-top: 14px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-primary);
+    padding: 14px;
+}
+
+#problem-select {
+    display: none;
+}
+
+.problem-display-label {
+    color: var(--primary-color);
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.problem-display-image {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    display: block;
+    height: auto;
+    max-width: 100%;
+    width: 100%;
+}
+
+.problem-display-image:not([src]) {
+    display: none;
+}
+
+.problem-display-message {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
 }
 
 .today-summary-numbers {

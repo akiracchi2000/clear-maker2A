@@ -11,13 +11,13 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
-    <link rel="stylesheet" href="student.css">
+    <link rel="stylesheet" href="student.css?v=1.4.24">
 </head>
 <body>
     <header class="app-header" style="align-items: center;">
         <div style="display: flex; align-items: baseline; gap: 8px;">
             <h1>Clear Maker 2A</h1>
-            <span style="font-size: 0.9rem; color: rgba(255, 255, 255, 0.8); font-weight: 600;">v1.1.3</span>
+            <span style="font-size: 0.9rem; color: rgba(255, 255, 255, 0.8); font-weight: 600;">v1.4.24</span>
         </div>
         <button id="settings-btn" class="icon-btn" type="button" aria-label="設定">⚙</button>
     </header>
@@ -39,17 +39,40 @@
             <span>生徒: </span><strong id="display-student-id"></strong>
         </div>
 
-        <div class="problem-section" style="background: var(--bg-secondary); padding: 20px; border-radius: var(--radius-lg); margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
-            <label style="font-weight: 600; display: block; margin-bottom: 8px;">解答する問題</label>
-            <div style="display: flex; gap: 10px;">
-                <select id="round-select" style="flex: 1; padding: 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 1rem; background-color: var(--bg-primary);">
-                    <option value="">-- データ読込中... --</option>
-                </select>
-                <select id="problem-select" disabled style="flex: 1; padding: 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 1rem; background-color: var(--bg-primary);">
-                    <option value="">-- 問題を選択 --</option>
-                </select>
+        <div id="result-section" class="result-section hidden">
+            <div id="result-badge" class="result-badge"></div>
+            <div class="result-details">
+                <h3>添削結果</h3>
+                <div id="result-content" class="markdown-body"></div>
             </div>
-            <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 8px;">先生から指定された回と問題番号を選択してください。</p>
+            <button id="today-summary-btn" class="primary-btn" style="margin-top: 20px; width: 100%;" type="button">本日のまとめを表示する</button>
+            <div id="today-summary-section" class="today-summary hidden">
+                <div id="today-summary-causes"></div>
+                <h3>本日の解き直し <span class="summary-brand">back to the 基本大全</span></h3>
+                <div id="today-summary-status" class="today-summary-status"></div>
+                <div id="today-summary-list" class="today-summary-list"></div>
+            </div>
+            <button id="new-question-btn" class="secondary-btn" style="margin-top: 20px; width: 100%;" type="button">別の問題を添削する</button>
+        </div>
+
+        <div class="problem-section" style="background: var(--bg-secondary); padding: 20px; border-radius: var(--radius-lg); margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+            <div id="problem-picker" class="problem-picker">
+                <label style="font-weight: 600; display: block; margin-bottom: 8px;">解答する問題</label>
+                <div style="display: flex; gap: 10px;">
+                    <select id="round-select" style="flex: 1; padding: 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 1rem; background-color: var(--bg-primary);">
+                        <option value="">-- データ読込中... --</option>
+                    </select>
+                    <select id="problem-select" disabled style="flex: 1; padding: 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 1rem; background-color: var(--bg-primary);">
+                        <option value="">-- 問題を選択 --</option>
+                    </select>
+                </div>
+                <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 8px;">先生から指定された回を選択してください。問題は結果に応じて自動で表示されます。</p>
+            </div>
+            <div id="problem-display" class="problem-display hidden">
+                <div id="problem-display-label" class="problem-display-label"></div>
+                <img id="problem-display-image" class="problem-display-image" alt="問題画像">
+                <div id="problem-display-message" class="problem-display-message"></div>
+            </div>
         </div>
 
         <div class="upload-section">
@@ -79,21 +102,6 @@
             <p>カガワ先生が添削中...<br>少しお待ちください</p>
         </div>
 
-        <div id="result-section" class="result-section hidden">
-            <div id="result-badge" class="result-badge"></div>
-            <div class="result-details">
-                <h3>添削結果</h3>
-                <div id="result-content" class="markdown-body"></div>
-            </div>
-            <button id="today-summary-btn" class="primary-btn" style="margin-top: 20px; width: 100%;" type="button">本日のまとめを表示する</button>
-            <div id="today-summary-section" class="today-summary hidden">
-                <div id="today-summary-causes"></div>
-                <h3>本日の解き直し back to the 基本大全</h3>
-                <div id="today-summary-status" class="today-summary-status"></div>
-                <div id="today-summary-list" class="today-summary-list"></div>
-            </div>
-            <button id="new-question-btn" class="secondary-btn" style="margin-top: 20px; width: 100%;" type="button">別の問題を添削する</button>
-        </div>
     </main>
 
     <div id="camera-modal" class="modal hidden" style="padding: 0; background: #000;">
@@ -111,6 +119,6 @@
     </div>
 
     <canvas id="camera-canvas" style="display: none;"></canvas>
-    <script src="student.js?v=1.1.3"></script>
+    <script src="student.js?v=1.4.24"></script>
 </body>
 </html>

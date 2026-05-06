@@ -8,12 +8,29 @@ let state = {
 };
 let problemData = {};
 
+const BRANCHING_FLOW_SUFFIX = {
+    '011': { pass: '022', retry: '021' },
+    '021': { pass: '032', retry: '031' },
+    '022': { pass: '033', retry: '032' },
+    '031': { pass: '042', retry: '041' },
+    '032': { pass: '043', retry: '042' },
+    '033': { pass: '043', retry: '042' },
+    '041': { pass: '022', retry: '022' },
+    '042': { pass: '033', retry: '033' },
+    '043': { pass: '', retry: '' },
+};
+
 // DOM Elements
 const els = {
     setupModal: document.getElementById('setup-modal'),
     studentIdInput: document.getElementById('student-id'),
+    problemPicker: document.getElementById('problem-picker'),
     roundSelect: document.getElementById('round-select'),
     problemSelect: document.getElementById('problem-select'),
+    problemDisplay: document.getElementById('problem-display'),
+    problemDisplayLabel: document.getElementById('problem-display-label'),
+    problemDisplayImage: document.getElementById('problem-display-image'),
+    problemDisplayMessage: document.getElementById('problem-display-message'),
     saveSetupBtn: document.getElementById('save-setup-btn'),
     userInfo: document.getElementById('user-info'),
     displayStudentId: document.getElementById('display-student-id'),
@@ -103,22 +120,100 @@ function updateUserInfo() {
     els.userInfo.classList.remove('hidden');
 }
 
+function getRoundKeys() {
+    return Object.keys(problemData);
+}
+
+function getSelectedProblem() {
+    const round = els.roundSelect.value;
+    const problemId = els.problemSelect.value;
+    if (!round || !problemId || !problemData[round]) return null;
+    return problemData[round].find(problem => problem.id === problemId) || null;
+}
+
+async function renderSelectedProblem() {
+    const problem = getSelectedProblem();
+    if (!problem) {
+        clearProblemDisplay();
+        return;
+    }
+
+    els.problemDisplayLabel.textContent = `${problem.label} (${problem.id})`;
+    els.problemDisplay.classList.remove('hidden');
+    els.problemDisplayImage.removeAttribute('src');
+    els.problemDisplayImage.alt = `${problem.label} の問題画像`;
+    els.problemDisplayMessage.textContent = '問題画像を読み込んでいます...';
+
+    try {
+        const imageData = await fetchProblemImage(problem.id);
+        if (els.problemSelect.value !== problem.id) return;
+
+        if (imageData) {
+            els.problemDisplayImage.src = imageData;
+            els.problemDisplayMessage.textContent = '';
+        } else if (problem.imageUrl) {
+            els.problemDisplayImage.src = problem.imageUrl;
+            els.problemDisplayMessage.textContent = '';
+        } else {
+            els.problemDisplayImage.alt = '問題画像が見つかりません';
+            els.problemDisplayMessage.textContent = '問題画像が見つかりません。';
+        }
+    } catch (e) {
+        console.error(e);
+        if (problem.imageUrl) {
+            els.problemDisplayImage.src = problem.imageUrl;
+            els.problemDisplayMessage.textContent = '';
+        } else {
+            els.problemDisplayImage.alt = '問題画像を読み込めませんでした';
+            els.problemDisplayMessage.textContent = `問題画像を読み込めませんでした。${e.message ? ` (${e.message})` : ''}`;
+        }
+    }
+}
+
+async function fetchProblemImage(problemId) {
+    const response = await fetch(GAS_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({
+            action: 'getProblemImage',
+            problemId,
+        }),
+    });
+    if (!response.ok) {
+        throw new Error(`画像APIエラー: HTTP ${response.status}`);
+    }
+    const json = await response.json();
+    if (json.error) throw new Error(json.error);
+    return json.status === 'success' ? json.imageData : '';
+}
+
+function clearProblemDisplay() {
+    els.problemDisplay.classList.add('hidden');
+    els.problemDisplayLabel.textContent = '';
+    els.problemDisplayImage.removeAttribute('src');
+    els.problemDisplayImage.alt = '問題画像';
+    els.problemDisplayMessage.textContent = '';
+}
+
+function setProblemPickerVisible(isVisible) {
+    if (!els.problemPicker) return;
+    els.problemPicker.classList.toggle('hidden', !isVisible);
+}
+
 function setupEventListeners() {
     els.roundSelect.addEventListener('change', (e) => {
         const round = e.target.value;
-        els.problemSelect.innerHTML = '<option value="">-- 問題を選択 --</option>';
-
-        if (round && problemData[round]) {
-            problemData[round].forEach(p => {
-                const opt = document.createElement('option');
-                opt.value = p.id;
-                opt.textContent = p.label;
-                els.problemSelect.appendChild(opt);
-            });
-            els.problemSelect.disabled = false;
+        clearProblemDisplay();
+        populateProblemSelect(round);
+        if (round) {
+            selectStartProblemForRound(round);
         } else {
-            els.problemSelect.disabled = true;
+            setProblemPickerVisible(true);
         }
+    });
+
+    els.problemSelect.addEventListener('change', () => {
+        renderSelectedProblem();
     });
 
     els.saveSetupBtn.addEventListener('click', () => {
@@ -190,6 +285,7 @@ function setupEventListeners() {
         renderThumbnails();
         els.resultSection.classList.add('hidden');
         clearTodaySummary();
+        setProblemPickerVisible(true);
     });
 }
 
@@ -424,14 +520,16 @@ async function evaluateAnswer() {
             body: JSON.stringify(payload),
         });
         const data = await response.json();
+        els.loadingIndicator.classList.add('hidden');
 
         if (data.error) {
             throw new Error(data.error);
         }
 
         const aiResponse = data.candidates[0].content.parts[0].text;
-        displayResult(aiResponse);
-        await sendLogToGAS(aiResponse);
+        const badgeText = displayResult(aiResponse);
+        await sendLogToGAS(aiResponse, problemId);
+        if (badgeText) selectNextProblemByResult(badgeText);
     } catch (err) {
         console.error(err);
         alert('エラーが発生しました: ' + err.message);
@@ -449,7 +547,7 @@ function displayResult(text) {
         els.resultContent.innerHTML = '<p>アップロードした画像と選択した問題が一致していないようです。問題番号と画像を確認して、もう一度やり直してください。</p>';
         els.resultSection.classList.remove('hidden');
         els.evaluateBtn.classList.remove('hidden');
-        return;
+        return '';
     }
 
     let badgeText = '判定不明';
@@ -482,14 +580,119 @@ function displayResult(text) {
 
     els.resultSection.classList.remove('hidden');
     clearTodaySummary();
+    return badgeText;
 }
 
-async function sendLogToGAS(resultText) {
+function selectNextProblemByResult(badgeText) {
+    els.loadingIndicator.classList.add('hidden');
+    const currentRound = els.roundSelect.value;
+    const currentProblemId = els.problemSelect.value;
+    if (!currentRound || !currentProblemId || !problemData[currentRound]) return;
+
+    const flowNextProblemId = getFlowNextProblemId(currentRound, currentProblemId, badgeText);
+    if (flowNextProblemId) {
+        selectProblem(currentRound, flowNextProblemId);
+        return;
+    }
+    if (flowNextProblemId === '') {
+        showRoundComplete();
+        return;
+    }
+
+    const roundKeys = getRoundKeys();
+    const currentRoundIndex = roundKeys.indexOf(currentRound);
+    const currentProblems = problemData[currentRound];
+    const currentProblemIndex = currentProblems.findIndex(problem => problem.id === currentProblemId);
+
+    if (badgeText.includes('レベルアップ')) {
+        const nextRound = roundKeys[currentRoundIndex + 1];
+        if (nextRound && problemData[nextRound] && problemData[nextRound].length > 0) {
+            selectProblem(nextRound, problemData[nextRound][0].id);
+        }
+        return;
+    }
+
+    const nextProblem = currentProblems[currentProblemIndex + 1];
+    if (nextProblem) {
+        selectProblem(currentRound, nextProblem.id);
+    }
+}
+
+function selectStartProblemForRound(round) {
+    if (!round || !problemData[round] || problemData[round].length === 0) return;
+
+    const startProblem = getProblemBySuffix(round, '011') || problemData[round][0];
+    selectProblem(round, startProblem.id);
+}
+
+function getFlowNextProblemId(round, problemId, badgeText) {
+    const suffix = String(problemId || '').slice(-3);
+    if (!BRANCHING_FLOW_SUFFIX[suffix]) return null;
+
+    const route = badgeText.includes('レベルアップ') ? 'pass' : 'retry';
+    const nextSuffix = BRANCHING_FLOW_SUFFIX[suffix][route];
+    if (!nextSuffix) return '';
+
+    const nextProblem = getProblemBySuffix(round, nextSuffix);
+    return nextProblem ? nextProblem.id : '';
+}
+
+function getProblemBySuffix(round, suffix) {
+    if (!round || !problemData[round]) return null;
+    return problemData[round].find(problem => String(problem.id || '').endsWith(suffix)) || null;
+}
+
+function showRoundComplete() {
+    clearProblemDisplay();
+    resetImagesForNextProblem();
+    setProblemPickerVisible(false);
+    els.problemDisplayLabel.textContent = 'この回は完了です';
+    els.problemDisplayMessage.textContent = '本日のまとめで解き直し問題を確認できます。';
+    els.problemDisplay.classList.remove('hidden');
+}
+
+function selectProblem(round, problemId) {
+    if (!round || !problemId || !problemData[round]) return;
+
+    els.loadingIndicator.classList.add('hidden');
+    resetImagesForNextProblem();
+    els.roundSelect.value = round;
+    populateProblemSelect(round);
+    els.problemSelect.value = problemId;
+    setProblemPickerVisible(false);
+    renderSelectedProblem();
+}
+
+function populateProblemSelect(round) {
+    els.problemSelect.innerHTML = '<option value="">-- 問題を選択 --</option>';
+    if (round && problemData[round]) {
+        problemData[round].forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            opt.textContent = p.label;
+            els.problemSelect.appendChild(opt);
+        });
+        els.problemSelect.disabled = false;
+    } else {
+        els.problemSelect.disabled = true;
+    }
+}
+
+function resetImagesForNextProblem() {
+    state.images = [];
+    els.cameraInput.value = '';
+    els.imagePreviewList.innerHTML = '';
+    els.previewContainer.classList.add('hidden');
+    els.evaluateBtn.classList.add('hidden');
+    els.uploadBtn.classList.remove('hidden');
+}
+
+async function sendLogToGAS(resultText, problemId) {
     try {
         const payload = {
             action: 'saveResult',
             studentId: state.studentId,
-            problemId: els.problemSelect.value || '',
+            problemId: problemId || els.problemSelect.value || '',
             resultText,
         };
 
@@ -580,7 +783,8 @@ function renderTodaySummary(data) {
         const numbers = document.createElement('div');
         numbers.className = 'today-summary-numbers';
         const chip = document.createElement('span');
-        chip.textContent = item.displayLabel || formatReviewProblemLabel([item.numberA, item.numberB, item.numberC, item.numberD]);
+        const finalLabel = getReviewDisplayLabel(item);
+        chip.textContent = finalLabel;
         numbers.appendChild(chip);
 
         const question = document.createElement('div');
@@ -599,6 +803,9 @@ function renderTodaySummary(data) {
     });
 
     renderMath(els.todaySummaryList);
+    normalizeRenderedReviewLabels();
+    setTimeout(normalizeRenderedReviewLabels, 0);
+    setTimeout(normalizeRenderedReviewLabels, 200);
 }
 
 function renderRetryCauses(retryCauses) {
@@ -639,6 +846,72 @@ function formatReviewProblemNumber(value) {
     return `第${chapter}章演習問題${exercise}-${problem}${suffix}`;
 }
 
+function getReviewDisplayLabel(item) {
+    const directLabel = getDirectReviewDisplayLabel(item);
+    if (directLabel) return directLabel;
+
+    const labelFromColumns = formatReviewProblemLabel([item.numberA, item.numberB, item.numberC, item.numberD]);
+    if (labelFromColumns && labelFromColumns !== '-') {
+        return labelFromColumns;
+    }
+
+    const candidates = [
+        item.displayLabel,
+        item.displayNumber,
+    ];
+    for (const candidate of candidates) {
+        const label = fixExercise13Label(normalizeReviewDisplayLabel(candidate));
+        if (label && label !== '-') return label;
+    }
+    return '-';
+}
+
+function getDirectReviewDisplayLabel(item) {
+    const chapter = normalizeProblemNumberText(item.numberA);
+    const b = normalizeProblemNumberText(item.numberB);
+    const c = normalizeProblemNumberText(item.numberC);
+    const d = normalizeProblemNumberText(item.numberD);
+    if (/^\d+$/.test(chapter) && /^\d{2,}$/.test(b) && !c && d) {
+        return `第${Number(chapter)}章演習問題${Number(b)}-${formatSubProblemMarker(d)}`;
+    }
+    return '';
+}
+
+function normalizeReviewDisplayLabel(label) {
+    const text = String(label || '')
+        .trim()
+        .replace(/[０-９]/g, char => String.fromCharCode(char.charCodeAt(0) - 0xFEE0))
+        .replace(/[（]/g, '(')
+        .replace(/[）]/g, ')')
+        .replace(/[‐‑‒–—―－−ー]/g, '-')
+        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+        .replace(/\s+/g, '');
+    return text.replace(/第(\d+)章演習問題([1-3])[-ｰ]([0-9])\(([^)]+)\)/g, (_all, chapter, tens, ones, suffix) => {
+        return `第${Number(chapter)}章演習問題${Number(tens + ones)}-(${suffix})`;
+    });
+}
+
+function normalizeRenderedReviewLabels() {
+    els.todaySummaryList.querySelectorAll('.today-summary-numbers span').forEach(chip => {
+        const normalized = fixExercise13Label(normalizeReviewDisplayLabel(chip.textContent));
+        if (chip.textContent !== normalized) chip.textContent = normalized;
+    });
+}
+
+function fixExercise13Label(label) {
+    const text = String(label || '');
+    const marker = '演習問題';
+    const index = text.indexOf(marker);
+    if (index === -1) return text;
+
+    const prefix = text.slice(0, index + marker.length);
+    const rest = text.slice(index + marker.length);
+    const match = rest.match(/^\s*1[\s\S]{0,8}?3\s*[（(]/);
+    if (!match) return text;
+
+    return prefix + '13-(' + rest.slice(match[0].length);
+}
+
 function shortenSummaryText(value, maxLength) {
     const text = String(value || '').trim();
     if (!text) return '';
@@ -646,12 +919,25 @@ function shortenSummaryText(value, maxLength) {
 }
 
 function formatReviewProblemLabel(numbers) {
-    const parts = (numbers || []).map(value => normalizeProblemNumberText(value)).filter(Boolean);
-    if (parts.length >= 3 && /^\d+$/.test(parts[0]) && /^\d+$/.test(parts[1]) && /^\d+$/.test(parts[2])) {
-        return `第${Number(parts[0])}章演習問題${Number(parts[1])}-${Number(parts[2])}${parts[3] || ''}`;
+    const values = [0, 1, 2, 3].map(index => normalizeProblemNumberText((numbers || [])[index]));
+    const [chapter, b, c, d] = values;
+
+    if (/^\d+$/.test(chapter)) {
+        if (/^\d{2,}$/.test(b) && !c && d) {
+            return `第${Number(chapter)}章演習問題${Number(b)}-${formatSubProblemMarker(d)}`;
+        }
+        if (/^\d{2,}$/.test(b) && isSubProblemMarker(c)) {
+            return `第${Number(chapter)}章演習問題${Number(b)}-${formatSubProblemMarker(c)}${d || ''}`;
+        }
+        if (/^[1-3]$/.test(b) && /^\d$/.test(c) && isSubProblemMarker(d)) {
+            return `第${Number(chapter)}章演習問題${Number(b + c)}-${formatSubProblemMarker(d)}`;
+        }
+        if (/^\d+$/.test(b) && /^\d+$/.test(c)) {
+            return `第${Number(chapter)}章演習問題${Number(b)}-${Number(c)}${d || ''}`;
+        }
     }
 
-    return formatReviewProblemNumber(parts.join(''));
+    return formatReviewProblemNumber(values.filter(Boolean).join(''));
 }
 
 function normalizeProblemNumberText(value) {
@@ -664,8 +950,21 @@ function normalizeProblemNumberText(value) {
         .replace(/\s+/g, '');
 }
 
+function isSubProblemMarker(value) {
+    const text = String(value || '').trim();
+    return /^\(.+\)$/.test(text) || /^\d+$/.test(text);
+}
+
+function formatSubProblemMarker(value) {
+    const text = String(value || '').trim();
+    return /^\d+$/.test(text) ? `(${Number(text)})` : text;
+}
+
 function renderMath(element) {
-    if (typeof renderMathInElement !== 'function') return;
+    if (typeof renderMathInElement !== 'function') {
+        setTimeout(() => renderMath(element), 100);
+        return;
+    }
 
     try {
         renderMathInElement(element, {
