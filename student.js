@@ -44,6 +44,7 @@ const els = {
     clearAllBtn: document.getElementById('clear-all-btn'),
 
     evaluateBtn: document.getElementById('evaluate-btn'),
+    mismatchMessage: document.getElementById('mismatch-message'),
     loadingIndicator: document.getElementById('loading-indicator'),
 
     resultSection: document.getElementById('result-section'),
@@ -467,6 +468,7 @@ async function evaluateAnswer() {
 
     els.evaluateBtn.disabled = true;
     els.evaluateBtn.classList.add('hidden');
+    clearMismatchMessage();
     els.loadingIndicator.classList.remove('hidden');
     els.resultSection.classList.add('hidden');
 
@@ -528,8 +530,10 @@ async function evaluateAnswer() {
 
         const aiResponse = data.candidates[0].content.parts[0].text;
         const badgeText = displayResult(aiResponse);
-        await sendLogToGAS(aiResponse, problemId);
-        if (badgeText) selectNextProblemByResult(badgeText);
+        if (badgeText) {
+            await sendLogToGAS(aiResponse, problemId);
+            selectNextProblemByResult(badgeText);
+        }
     } catch (err) {
         console.error(err);
         alert('エラーが発生しました: ' + err.message);
@@ -542,10 +546,7 @@ async function evaluateAnswer() {
 
 function displayResult(text) {
     if (text.includes('指定した問題が間違っています')) {
-        els.resultBadge.className = 'result-badge retry';
-        els.resultBadge.textContent = '指定した問題が間違っています';
-        els.resultContent.innerHTML = '<p>アップロードした画像と選択した問題が一致していないようです。問題番号と画像を確認して、もう一度やり直してください。</p>';
-        els.resultSection.classList.remove('hidden');
+        showMismatchMessage('アップロードした画像と現在の問題が一致していないようです。問題番号と画像を確認して、もう一度添削してください。');
         els.evaluateBtn.classList.remove('hidden');
         return '';
     }
@@ -579,8 +580,21 @@ function displayResult(text) {
     renderMath(els.resultContent);
 
     els.resultSection.classList.remove('hidden');
+    clearMismatchMessage();
     clearTodaySummary();
     return badgeText;
+}
+
+function showMismatchMessage(message) {
+    if (!els.mismatchMessage) return;
+    els.mismatchMessage.textContent = message;
+    els.mismatchMessage.classList.remove('hidden');
+}
+
+function clearMismatchMessage() {
+    if (!els.mismatchMessage) return;
+    els.mismatchMessage.textContent = '';
+    els.mismatchMessage.classList.add('hidden');
 }
 
 function selectNextProblemByResult(badgeText) {
