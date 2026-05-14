@@ -41,16 +41,16 @@
 1. ブラウザで [Google Apps Script](https://script.google.com/) を開き、「新しいプロジェクト」を作成します。
 2. もともと書かれている `function myFunction() { ... }` をすべて消去します。
 3. ローカルにある **`backend_GAS_spreadsheet.gs`** のソースコードを全選択してコピーし、GASのエディタに貼り付けます。
-4. 貼り付けたコードの中で、以下の2つの文字列を書き換えます。
+4. 貼り付けたコードの中で、以下のスプレッドシートIDを書き換えます。
 
 ```javascript
-// 45行目付近: ご自身のGemini APIキーにする
-const STUDENT_APP_API_KEY = "ここにAPIキーを入力してください";
-
-// 66行目付近: 手順1でコピーしたスプレッドシートIDにする
+// 手順1でコピーしたスプレッドシートIDにする
 const SPREADSHEET_ID = "YOUR_SPREADSHEET_ID_HERE";
 ```
-5. 「プロジェクトの保存（フロッピーアイコン）」をクリックします。
+5. Gemini APIキーはコードに貼り付けず、Apps Script の **プロジェクトの設定** から **スクリプト プロパティ** に保存します。
+   * プロパティ名: `GEMINI_API_KEY`
+   * 値: 使用するGemini APIキー
+6. 「プロジェクトの保存（フロッピーアイコン）」をクリックします。
 
 ---
 

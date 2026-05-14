@@ -500,7 +500,11 @@ async function evaluateAnswer() {
 (2) 不正解: [答え]
 
 フィードバック:
-不正解の問題がある場合のみ、問題番号、間違えた原因、正しい考え方を簡潔に書いてください。
+不正解の問題がある場合のみ、問題番号、間違えた原因、正答、簡単な解法を必ず書いてください。
+各不正解について、次の形を守ってください。
+(問題番号) **原因:** [短く]
+**正答:** [正しい答え]
+**簡単な解法:** [1〜3文または短い式で、途中の要点が分かる説明]
 原因には、可能なら「たすき掛け」「因数分解」「平方完成」「判別式」「場合分け」など、復習すべきテーマ名を必ず含めてください。
 全問正解の場合は、短いお祝いの言葉のみで構いません。
 数式はKaTeX形式で書いてください。`;
@@ -531,7 +535,7 @@ async function evaluateAnswer() {
         const aiResponse = data.candidates[0].content.parts[0].text;
         const badgeText = displayResult(aiResponse);
         if (badgeText) {
-            await sendLogToGAS(aiResponse, problemId);
+            await saveResultWithRetry(aiResponse, problemId);
             selectNextProblemByResult(badgeText);
         }
     } catch (err) {
@@ -609,7 +613,7 @@ function selectNextProblemByResult(badgeText) {
         return;
     }
     if (flowNextProblemId === '') {
-        showRoundComplete();
+        showRoundComplete(currentProblemId, badgeText);
         return;
     }
 
@@ -656,13 +660,16 @@ function getProblemBySuffix(round, suffix) {
     return problemData[round].find(problem => String(problem.id || '').endsWith(suffix)) || null;
 }
 
-function showRoundComplete() {
+function showRoundComplete(problemId, badgeText) {
     clearProblemDisplay();
     resetImagesForNextProblem();
     setProblemPickerVisible(false);
     els.problemDisplayLabel.textContent = 'この回は完了です';
     els.problemDisplayMessage.textContent = '本日のまとめで解き直し問題を確認できます。';
     els.problemDisplay.classList.remove('hidden');
+    if (String(problemId || '').endsWith('043') && String(badgeText || '').includes('レベルアップ')) {
+        setTimeout(() => alert('コンプリートしました！'), 0);
+    }
 }
 
 function selectProblem(round, problemId) {
@@ -701,24 +708,41 @@ function resetImagesForNextProblem() {
     els.uploadBtn.classList.remove('hidden');
 }
 
-async function sendLogToGAS(resultText, problemId) {
-    try {
-        const payload = {
-            action: 'saveResult',
-            studentId: state.studentId,
-            problemId: problemId || els.problemSelect.value || '',
-            resultText,
-        };
+async function saveResultWithRetry(resultText, problemId) {
+    const payload = {
+        action: 'saveResult',
+        studentId: state.studentId,
+        problemId: problemId || els.problemSelect.value || '',
+        resultText,
+    };
 
-        return fetch(GAS_API_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify(payload),
-        });
-    } catch (e) {
-        console.error('Failed to save result to GAS', e);
+    let lastError = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+            const response = await fetch(GAS_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify(payload),
+            });
+            const json = await response.json();
+            if (!response.ok || json.error || json.status !== 'success') {
+                throw new Error(json.error || `保存APIエラー: HTTP ${response.status}`);
+            }
+            return json;
+        } catch (e) {
+            lastError = e;
+            console.error(`Failed to save result to GAS (attempt ${attempt})`, e);
+            if (attempt < 3) {
+                await wait(700 * attempt + Math.floor(Math.random() * 500));
+            }
+        }
     }
+
+    throw new Error(`提出履歴への保存に失敗しました。通信状況を確認してもう一度試してください。${lastError && lastError.message ? ` (${lastError.message})` : ''}`);
+}
+
+function wait(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 async function showTodaySummary() {
@@ -862,11 +886,11 @@ function formatReviewProblemNumber(value) {
 
 function getReviewDisplayLabel(item) {
     const directLabel = getDirectReviewDisplayLabel(item);
-    if (directLabel) return directLabel;
+    if (directLabel) return normalizeReviewProblemLabel(directLabel);
 
     const labelFromColumns = formatReviewProblemLabel([item.numberA, item.numberB, item.numberC, item.numberD]);
     if (labelFromColumns && labelFromColumns !== '-') {
-        return labelFromColumns;
+        return normalizeReviewProblemLabel(labelFromColumns);
     }
 
     const candidates = [
@@ -874,10 +898,14 @@ function getReviewDisplayLabel(item) {
         item.displayNumber,
     ];
     for (const candidate of candidates) {
-        const label = fixExercise13Label(normalizeReviewDisplayLabel(candidate));
+        const label = normalizeReviewProblemLabel(candidate);
         if (label && label !== '-') return label;
     }
     return '-';
+}
+
+function normalizeReviewProblemLabel(label) {
+    return collapseDuplicateSubProblemMarker(fixExercise13Label(normalizeReviewDisplayLabel(label)));
 }
 
 function getDirectReviewDisplayLabel(item) {
@@ -894,26 +922,29 @@ function getDirectReviewDisplayLabel(item) {
 function normalizeReviewDisplayLabel(label) {
     const text = String(label || '')
         .trim()
+        .replace(/[⑴⑵⑶⑷⑸⑹⑺⑻⑼⑽⑾⑿⒀⒁⒂⒃⒄⒅⒆⒇]/g, char => `(${char.charCodeAt(0) - 0x2474})`)
         .replace(/[０-９]/g, char => String.fromCharCode(char.charCodeAt(0) - 0xFEE0))
         .replace(/[（]/g, '(')
         .replace(/[）]/g, ')')
         .replace(/[‐‑‒–—―－−ー]/g, '-')
         .replace(/[\u200B-\u200D\uFEFF]/g, '')
         .replace(/\s+/g, '');
-    return text.replace(/第(\d+)章演習問題([1-3])[-ｰ]([0-9])\(([^)]+)\)/g, (_all, chapter, tens, ones, suffix) => {
-        return `第${Number(chapter)}章演習問題${Number(tens + ones)}-(${suffix})`;
-    });
+    return text
+        .replace(/第(\d+)章演習問題([1-3])[-ｰ]([0-9])\(([^)]+)\)/g, (_all, chapter, tens, ones, suffix) => {
+            return `第${Number(chapter)}章演習問題${Number(tens + ones)}-(${suffix})`;
+        })
+        .replace(/-\(([^)]+)\)\(\1\)/g, '-($1)');
 }
 
 function normalizeRenderedReviewLabels() {
     els.todaySummaryList.querySelectorAll('.today-summary-numbers span').forEach(chip => {
-        const normalized = fixExercise13Label(normalizeReviewDisplayLabel(chip.textContent));
+        const normalized = normalizeReviewProblemLabel(chip.textContent);
         if (chip.textContent !== normalized) chip.textContent = normalized;
     });
 }
 
 function fixExercise13Label(label) {
-    const text = String(label || '');
+    const text = collapseDuplicateSubProblemMarker(String(label || ''));
     const marker = '演習問題';
     const index = text.indexOf(marker);
     if (index === -1) return text;
@@ -923,7 +954,20 @@ function fixExercise13Label(label) {
     const match = rest.match(/^\s*1[\s\S]{0,8}?3\s*[（(]/);
     if (!match) return text;
 
-    return prefix + '13-(' + rest.slice(match[0].length);
+    return collapseDuplicateSubProblemMarker(prefix + '13-(' + rest.slice(match[0].length));
+}
+
+function collapseDuplicateSubProblemMarker(label) {
+    let text = String(label || '');
+    let previous = '';
+    while (text !== previous) {
+        previous = text;
+        text = text
+            .replace(/-\(([^)]+)\)\(\1\)/g, '-($1)')
+            .replace(/-\(([^)]+)\)-\(\1\)/g, '-($1)')
+            .replace(/-\(([^)]+)\)\s*\1(?!\d)/g, '-($1)');
+    }
+    return text;
 }
 
 function shortenSummaryText(value, maxLength) {
@@ -941,7 +985,7 @@ function formatReviewProblemLabel(numbers) {
             return `第${Number(chapter)}章演習問題${Number(b)}-${formatSubProblemMarker(d)}`;
         }
         if (/^\d{2,}$/.test(b) && isSubProblemMarker(c)) {
-            return `第${Number(chapter)}章演習問題${Number(b)}-${formatSubProblemMarker(c)}${d || ''}`;
+            return `第${Number(chapter)}章演習問題${Number(b)}-${formatSubProblemMarker(c)}${formatExtraSubProblemMarker(c, d)}`;
         }
         if (/^[1-3]$/.test(b) && /^\d$/.test(c) && isSubProblemMarker(d)) {
             return `第${Number(chapter)}章演習問題${Number(b + c)}-${formatSubProblemMarker(d)}`;
@@ -957,6 +1001,7 @@ function formatReviewProblemLabel(numbers) {
 function normalizeProblemNumberText(value) {
     return String(value || '')
         .trim()
+        .replace(/[⑴⑵⑶⑷⑸⑹⑺⑻⑼⑽⑾⑿⒀⒁⒂⒃⒄⒅⒆⒇]/g, char => `(${char.charCodeAt(0) - 0x2474})`)
         .replace(/[０-９]/g, char => String.fromCharCode(char.charCodeAt(0) - 0xFEE0))
         .replace(/[（]/g, '(')
         .replace(/[）]/g, ')')
@@ -972,6 +1017,12 @@ function isSubProblemMarker(value) {
 function formatSubProblemMarker(value) {
     const text = String(value || '').trim();
     return /^\d+$/.test(text) ? `(${Number(text)})` : text;
+}
+
+function formatExtraSubProblemMarker(baseValue, extraValue) {
+    const base = formatSubProblemMarker(baseValue);
+    const extra = formatSubProblemMarker(extraValue);
+    return extra && extra !== base ? extra : '';
 }
 
 function renderMath(element) {
