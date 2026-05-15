@@ -579,7 +579,7 @@ function displayResult(text) {
         els.resultBadge.textContent = '同じレベルの次の問題へ！';
     }
 
-    const processedText = detailText.replace(/\\/g, '\\\\');
+    const processedText = detailText;
     els.resultContent.innerHTML = marked.parse(processedText, { breaks: true });
     renderMath(els.resultContent);
 
