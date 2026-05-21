@@ -507,7 +507,9 @@ async function evaluateAnswer() {
 **簡単な解法:** [1〜3文または短い式で、途中の要点が分かる説明]
 原因には、可能なら「たすき掛け」「因数分解」「平方完成」「判別式」「場合分け」など、復習すべきテーマ名を必ず含めてください。
 全問正解の場合は、短いお祝いの言葉のみで構いません。
-数式はKaTeX形式で書いてください。`;
+数式はKaTeX形式で書いてください。
+不等号は \\le や \\ge、\\leq や \\geq ではなく、必ず2本線の \\leqq と \\geqq に統一してください。
+分数は (11)/(3) のように書かず、必ず \\frac{11}{3} の形で書き、数式部分は $...$ で囲んでください。`;
 
         const payload = {
             apiKey: 'server',
@@ -579,14 +581,49 @@ function displayResult(text) {
         els.resultBadge.textContent = '同じレベルの次の問題へ！';
     }
 
-    const processedText = detailText;
-    els.resultContent.innerHTML = marked.parse(processedText, { breaks: true });
+    const processedText = normalizeResultMarkdown(detailText);
+    const resultHtml = normalizeResultHtml(marked.parse(processedText, { breaks: true }));
+    els.resultContent.innerHTML = resultHtml;
     renderMath(els.resultContent);
 
     els.resultSection.classList.remove('hidden');
     clearMismatchMessage();
     clearTodaySummary();
     return badgeText;
+}
+
+function normalizeResultMarkdown(text) {
+    const mathBlocks = [];
+    const normalizeMathCommands = value => value
+        .replace(/\\leq\b|\\le\b/g, '\\leqq')
+        .replace(/\\geq\b|\\ge\b/g, '\\geqq');
+    const storeMath = match => {
+        const key = `MATHPLACEHOLDER${mathBlocks.length}END`;
+        mathBlocks.push(normalizeMathCommands(match));
+        return key;
+    };
+
+    let normalized = text
+        .replace(/\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$[^$\n]+?\$/g, storeMath)
+        .replace(/\*{2}\s*(原因|正答|簡単な解法)\s*[:：]\s*\*{2}/g, '**$1:**')
+        .replace(/(^|\n)(\s*(?:\(\d+\)\s*)?)(?:\*\*)?(原因|正答|簡単な解法)\s*[:：](?:\*\*)?\s*/g, '$1$2**$3:** ')
+        .replace(/\\leqq\b/g, '≦')
+        .replace(/\\geqq\b/g, '≧')
+        .replace(/\\leq\b/g, '≦')
+        .replace(/\\geq\b/g, '≧')
+        .replace(/\\le\b/g, '≦')
+        .replace(/\\ge\b/g, '≧')
+        .replace(/\\lt\b/g, '<')
+        .replace(/\\gt\b/g, '>')
+        .replace(/(-?)\\frac\{([^{}]+)\}\{([^{}]+)\}/g, (_, sign, numerator, denominator) => `$${sign}\\frac{${numerator}}{${denominator}}$`)
+        .replace(/(-?)\s*\((-?\d+)\)\/\((-?\d+)\)/g, (_, sign, numerator, denominator) => `$${sign}\\frac{${numerator}}{${denominator}}$`);
+
+    normalized = normalized.replace(/MATHPLACEHOLDER(\d+)END/g, (_, index) => mathBlocks[Number(index)] || '');
+    return normalized;
+}
+
+function normalizeResultHtml(html) {
+    return html.replace(/\*\*(原因|正答|簡単な解法):\*\*/g, '<strong>$1:</strong>');
 }
 
 function showMismatchMessage(message) {
