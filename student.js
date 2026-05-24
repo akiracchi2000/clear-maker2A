@@ -7,6 +7,7 @@ let state = {
     images: [],
 };
 let problemData = {};
+const PROGRESS_STORAGE_PREFIX = 'student_problem_progress_';
 
 const BRANCHING_FLOW_SUFFIX = {
     '011': { pass: '022', retry: '021' },
@@ -31,6 +32,8 @@ const els = {
     problemDisplayLabel: document.getElementById('problem-display-label'),
     problemDisplayImage: document.getElementById('problem-display-image'),
     problemDisplayMessage: document.getElementById('problem-display-message'),
+    startOtherTestBtn: document.getElementById('start-other-test-btn'),
+    uraModeBanner: document.getElementById('ura-mode-banner'),
     saveSetupBtn: document.getElementById('save-setup-btn'),
     userInfo: document.getElementById('user-info'),
     displayStudentId: document.getElementById('display-student-id'),
@@ -109,6 +112,7 @@ async function fetchAndSetupProblems() {
             els.roundSelect.appendChild(opt);
         });
         els.roundSelect.disabled = false;
+        restoreProblemProgress();
     } catch (e) {
         console.error(e);
         els.roundSelect.innerHTML = '<option value="">-- 読込失敗 --</option>';
@@ -198,12 +202,20 @@ function clearProblemDisplay() {
 
 function setProblemPickerVisible(isVisible) {
     if (!els.problemPicker) return;
+    const isUraMode = !els.uraModeBanner.classList.contains('hidden');
     els.problemPicker.classList.toggle('hidden', !isVisible);
+    els.startOtherTestBtn.classList.toggle('hidden', isVisible && !isUraMode);
+}
+
+function setUraModeVisible(isVisible) {
+    els.uraModeBanner.classList.toggle('hidden', !isVisible);
+    els.roundSelect.disabled = isVisible;
 }
 
 function setupEventListeners() {
     els.roundSelect.addEventListener('change', (e) => {
         const round = e.target.value;
+        setUraModeVisible(false);
         clearProblemDisplay();
         populateProblemSelect(round);
         if (round) {
@@ -214,6 +226,12 @@ function setupEventListeners() {
     });
 
     els.problemSelect.addEventListener('change', () => {
+        clearProblemDisplay();
+        resetImagesForNextProblem();
+        els.resultSection.classList.add('hidden');
+        clearMismatchMessage();
+        clearTodaySummary();
+        setProblemPickerVisible(false);
         renderSelectedProblem();
     });
 
@@ -228,6 +246,7 @@ function setupEventListeners() {
         localStorage.setItem('student_id', id);
         updateUserInfo();
         els.setupModal.classList.add('hidden');
+        restoreProblemProgress();
     });
 
     els.settingsBtn.addEventListener('click', () => {
@@ -288,6 +307,8 @@ function setupEventListeners() {
         clearTodaySummary();
         setProblemPickerVisible(true);
     });
+
+    els.startOtherTestBtn.addEventListener('click', startOtherTest);
 }
 
 function renderThumbnails() {
@@ -501,10 +522,13 @@ async function evaluateAnswer() {
 
 フィードバック:
 不正解の問題がある場合のみ、問題番号、間違えた原因、正答、簡単な解法を必ず書いてください。
+正答は、GASから渡される【小問別解答（スプレッドシート引用）】がある場合、その該当小問の内容をそのまま引用してください。
+簡単な解法は、【小問別解説（スプレッドシート引用）】がある場合、その該当小問の内容を優先して引用し、生徒が次に同じ型を解けるように要点を少し補ってください。
+小問別解答がある場合、正答を推測で新しく作らないでください。
 各不正解について、次の形を守ってください。
 (問題番号) **原因:** [短く]
 **正答:** [正しい答え]
-**簡単な解法:** [1〜3文または短い式で、途中の要点が分かる説明]
+**簡単な解法:** [2〜5文または短い式で、方針、途中の要点、最後の確認が分かる説明]
 原因には、可能なら「たすき掛け」「因数分解」「平方完成」「判別式」「場合分け」など、復習すべきテーマ名を必ず含めてください。
 全問正解の場合は、短いお祝いの言葉のみで構いません。
 数式はKaTeX形式で書いてください。
@@ -646,10 +670,12 @@ function selectNextProblemByResult(badgeText) {
 
     const flowNextProblemId = getFlowNextProblemId(currentRound, currentProblemId, badgeText);
     if (flowNextProblemId) {
+        saveProblemProgress(currentRound, flowNextProblemId, currentRound, currentProblemId);
         selectProblem(currentRound, flowNextProblemId);
         return;
     }
     if (flowNextProblemId === '') {
+        saveProblemProgress(currentRound, '', currentRound, currentProblemId, true);
         showRoundComplete(currentProblemId, badgeText);
         return;
     }
@@ -662,6 +688,7 @@ function selectNextProblemByResult(badgeText) {
     if (badgeText.includes('レベルアップ')) {
         const nextRound = roundKeys[currentRoundIndex + 1];
         if (nextRound && problemData[nextRound] && problemData[nextRound].length > 0) {
+            saveProblemProgress(nextRound, problemData[nextRound][0].id, currentRound, currentProblemId);
             selectProblem(nextRound, problemData[nextRound][0].id);
         }
         return;
@@ -669,7 +696,77 @@ function selectNextProblemByResult(badgeText) {
 
     const nextProblem = currentProblems[currentProblemIndex + 1];
     if (nextProblem) {
+        saveProblemProgress(currentRound, nextProblem.id, currentRound, currentProblemId);
         selectProblem(currentRound, nextProblem.id);
+    }
+}
+
+function getProgressStorageKey() {
+    if (!state.studentId) return '';
+    return `${PROGRESS_STORAGE_PREFIX}${state.studentId}`;
+}
+
+function saveProblemProgress(round, problemId, lastSolvedRound, lastSolvedProblemId, isRoundComplete = false) {
+    const key = getProgressStorageKey();
+    if (!key) return;
+
+    const payload = {
+        round,
+        problemId,
+        lastSolvedRound,
+        lastSolvedProblemId,
+        isRoundComplete,
+        savedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(key, JSON.stringify(payload));
+}
+
+function clearProblemProgress() {
+    const key = getProgressStorageKey();
+    if (!key) return;
+    localStorage.removeItem(key);
+}
+
+function startOtherTest() {
+    clearProblemProgress();
+    setUraModeVisible(false);
+    clearProblemDisplay();
+    resetImagesForNextProblem();
+    clearMismatchMessage();
+    clearTodaySummary();
+    els.resultSection.classList.add('hidden');
+    els.roundSelect.value = '';
+    populateProblemSelect('');
+    setProblemPickerVisible(true);
+}
+
+function restoreProblemProgress() {
+    const key = getProgressStorageKey();
+    if (!key || Object.keys(problemData).length === 0) return false;
+
+    try {
+        const saved = JSON.parse(localStorage.getItem(key) || 'null');
+        if (!saved || !saved.round || !problemData[saved.round]) return false;
+
+        if (saved.isRoundComplete) {
+            const lastSolvedProblem = problemData[saved.lastSolvedRound || saved.round]?.find(problem => problem.id === saved.lastSolvedProblemId);
+            populateProblemSelect(saved.round);
+            els.roundSelect.value = saved.round;
+            showRoundComplete(saved.lastSolvedProblemId, '');
+            if (lastSolvedProblem) {
+                els.problemDisplayMessage.textContent = `${lastSolvedProblem.label} まで完了しています。`;
+            }
+            return true;
+        }
+
+        const hasProblem = problemData[saved.round].some(problem => problem.id === saved.problemId);
+        if (!hasProblem) return false;
+
+        selectProblem(saved.round, saved.problemId);
+        return true;
+    } catch (e) {
+        console.error('Failed to restore problem progress', e);
+        return false;
     }
 }
 
@@ -704,15 +801,29 @@ function showRoundComplete(problemId, badgeText) {
     els.problemDisplayLabel.textContent = 'この回は完了です';
     els.problemDisplayMessage.textContent = '本日のまとめで解き直し問題を確認できます。';
     els.problemDisplay.classList.remove('hidden');
-    if (String(problemId || '').endsWith('043') && String(badgeText || '').includes('レベルアップ')) {
-        setTimeout(() => alert('コンプリートしました！'), 0);
+    if (String(problemId || '').endsWith('043')) {
+        openUraMode();
     }
+}
+
+function openUraMode() {
+    const round = els.roundSelect.value;
+    if (!round || !problemData[round]) return;
+
+    populateProblemSelect(round);
+    setUraModeVisible(true);
+    setProblemPickerVisible(true);
+    els.problemDisplayLabel.textContent = '裏モード開放！';
+    els.problemDisplayMessage.textContent = 'この回のすべての問題を選んで復習できます。';
+    els.problemDisplay.classList.remove('hidden');
+    setTimeout(() => alert('裏モード開放！'), 0);
 }
 
 function selectProblem(round, problemId) {
     if (!round || !problemId || !problemData[round]) return;
 
     els.loadingIndicator.classList.add('hidden');
+    setUraModeVisible(false);
     resetImagesForNextProblem();
     els.roundSelect.value = round;
     populateProblemSelect(round);

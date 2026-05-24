@@ -11,13 +11,13 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
-    <link rel="stylesheet" href="student.css?v=1.4.44">
+    <link rel="stylesheet" href="student.css?v=1.4.52">
 </head>
 <body>
     <header class="app-header" style="align-items: center;">
         <div style="display: flex; align-items: baseline; gap: 8px;">
             <h1>Clear Maker 2A</h1>
-            <span style="font-size: 0.9rem; color: rgba(255, 255, 255, 0.8); font-weight: 600;">v1.4.44</span>
+            <span style="font-size: 0.9rem; color: rgba(255, 255, 255, 0.8); font-weight: 600;">v1.4.52</span>
         </div>
         <button id="settings-btn" class="icon-btn" type="button" aria-label="設定">⚙</button>
     </header>
@@ -58,6 +58,7 @@
         <div class="problem-section" style="background: var(--bg-secondary); padding: 20px; border-radius: var(--radius-lg); margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
             <div id="problem-picker" class="problem-picker">
                 <label style="font-weight: 600; display: block; margin-bottom: 8px;">解答する問題</label>
+                <div id="ura-mode-banner" class="ura-mode-banner hidden">裏モード開放！</div>
                 <div style="display: flex; gap: 10px;">
                     <select id="round-select" style="flex: 1; padding: 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 1rem; background-color: var(--bg-primary);">
                         <option value="">-- データ読込中... --</option>
@@ -68,6 +69,7 @@
                 </div>
                 <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 8px;">先生から指定された回を選択してください。問題は結果に応じて自動で表示されます。</p>
             </div>
+            <button id="start-other-test-btn" class="secondary-btn start-other-test-btn hidden" type="button">別の回のテストをスタートする</button>
             <div id="problem-display" class="problem-display hidden">
                 <div id="problem-display-label" class="problem-display-label"></div>
                 <img id="problem-display-image" class="problem-display-image" alt="問題画像">
@@ -120,6 +122,6 @@
     </div>
 
     <canvas id="camera-canvas" style="display: none;"></canvas>
-    <script src="student.js?v=1.4.44"></script>
+    <script src="student.js?v=1.4.52"></script>
 </body>
 </html>
