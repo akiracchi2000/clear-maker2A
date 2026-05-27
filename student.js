@@ -105,7 +105,7 @@ async function fetchAndSetupProblems() {
 
         problemData = json.data;
         els.roundSelect.innerHTML = '<option value="">-- 回を選択 --</option>';
-        Object.keys(problemData).forEach(round => {
+        getRoundSelectKeys().forEach(round => {
             const opt = document.createElement('option');
             opt.value = round;
             opt.textContent = round;
@@ -127,6 +127,22 @@ function updateUserInfo() {
 
 function getRoundKeys() {
     return Object.keys(problemData);
+}
+
+function getRoundSelectKeys() {
+    return Object.keys(problemData).sort(compareRoundDesc);
+}
+
+function compareRoundDesc(a, b) {
+    const aNumber = extractRoundNumber(a);
+    const bNumber = extractRoundNumber(b);
+    if (aNumber !== bNumber) return bNumber - aNumber;
+    return String(b).localeCompare(String(a), 'ja', { numeric: true });
+}
+
+function extractRoundNumber(value) {
+    const match = String(value || '').match(/\d+/);
+    return match ? Number(match[0]) : -1;
 }
 
 function getSelectedProblem() {
