@@ -8,6 +8,7 @@ let state = {
 };
 let problemData = {};
 const PROGRESS_STORAGE_PREFIX = 'student_problem_progress_';
+const ACHIEVEMENT_STORAGE_PREFIX = 'student_achievement_stars_';
 
 const BRANCHING_FLOW_SUFFIX = {
     '011': { pass: '022', retry: '021' },
@@ -34,6 +35,7 @@ const els = {
     problemDisplayMessage: document.getElementById('problem-display-message'),
     startOtherTestBtn: document.getElementById('start-other-test-btn'),
     uraModeBanner: document.getElementById('ura-mode-banner'),
+    achievementStars: document.getElementById('achievement-stars'),
     saveSetupBtn: document.getElementById('save-setup-btn'),
     userInfo: document.getElementById('user-info'),
     displayStudentId: document.getElementById('display-student-id'),
@@ -103,7 +105,7 @@ async function fetchAndSetupProblems() {
             throw new Error(json.error || 'データ取得に失敗しました');
         }
 
-        problemData = json.data;
+        problemData = normalizeProblemData(json.data);
         els.roundSelect.innerHTML = '<option value="">-- 回を選択 --</option>';
         getRoundSelectKeys().forEach(round => {
             const opt = document.createElement('option');
@@ -121,8 +123,33 @@ async function fetchAndSetupProblems() {
 
 function updateUserInfo() {
     if (!state.studentId) return;
+    updateAchievementStars();
     els.displayStudentId.textContent = state.studentId;
     els.userInfo.classList.remove('hidden');
+}
+
+function getAchievementStorageKey() {
+    if (!state.studentId) return '';
+    return `${ACHIEVEMENT_STORAGE_PREFIX}${state.studentId}`;
+}
+
+function getAchievementStarCount() {
+    const key = getAchievementStorageKey();
+    if (!key) return 0;
+    return Math.max(0, Number(localStorage.getItem(key) || 0) || 0);
+}
+
+function updateAchievementStars() {
+    if (!els.achievementStars) return;
+    const count = getAchievementStarCount();
+    els.achievementStars.textContent = count > 0 ? '⭐'.repeat(count) : '';
+}
+
+function addAchievementStar() {
+    const key = getAchievementStorageKey();
+    if (!key) return;
+    localStorage.setItem(key, String(getAchievementStarCount() + 1));
+    updateAchievementStars();
 }
 
 function getRoundKeys() {
@@ -143,6 +170,26 @@ function compareRoundDesc(a, b) {
 function extractRoundNumber(value) {
     const match = String(value || '').match(/\d+/);
     return match ? Number(match[0]) : -1;
+}
+
+function normalizeProblemData(data) {
+    const normalized = {};
+    Object.entries(data || {}).forEach(([round, problems]) => {
+        normalized[round] = (Array.isArray(problems) ? problems : [])
+            .map(problem => ({
+                ...problem,
+                id: normalizeProblemId(problem.id),
+            }))
+            .filter(problem => problem.id);
+    });
+    return normalized;
+}
+
+function normalizeProblemId(value) {
+    return String(value || '')
+        .trim()
+        .replace(/[０-９]/g, char => String.fromCharCode(char.charCodeAt(0) - 0xFEE0))
+        .replace(/[^\dA-Za-z_-]/g, '');
 }
 
 function getSelectedProblem() {
@@ -210,6 +257,7 @@ async function fetchProblemImage(problemId) {
 
 function clearProblemDisplay() {
     els.problemDisplay.classList.add('hidden');
+    els.problemDisplay.classList.remove('congratulations');
     els.problemDisplayLabel.textContent = '';
     els.problemDisplayImage.removeAttribute('src');
     els.problemDisplayImage.alt = '問題画像';
@@ -225,6 +273,10 @@ function setProblemPickerVisible(isVisible) {
 
 function setUraModeVisible(isVisible) {
     els.uraModeBanner.classList.toggle('hidden', !isVisible);
+    if (!isVisible) {
+        els.uraModeBanner.classList.remove('congratulations');
+        els.uraModeBanner.textContent = '裏モード開放！';
+    }
     els.roundSelect.disabled = isVisible;
 }
 
@@ -692,6 +744,9 @@ function selectNextProblemByResult(badgeText) {
     }
     if (flowNextProblemId === '') {
         saveProblemProgress(currentRound, '', currentRound, currentProblemId, true);
+        if (isFinalProblemPassed(currentProblemId, badgeText)) {
+            addAchievementStar();
+        }
         showRoundComplete(currentProblemId, badgeText);
         return;
     }
@@ -765,20 +820,22 @@ function restoreProblemProgress() {
         if (!saved || !saved.round || !problemData[saved.round]) return false;
 
         if (saved.isRoundComplete) {
-            const lastSolvedProblem = problemData[saved.lastSolvedRound || saved.round]?.find(problem => problem.id === saved.lastSolvedProblemId);
+            const savedLastProblemId = normalizeProblemId(saved.lastSolvedProblemId);
+            const lastSolvedProblem = problemData[saved.lastSolvedRound || saved.round]?.find(problem => problem.id === savedLastProblemId);
             populateProblemSelect(saved.round);
             els.roundSelect.value = saved.round;
-            showRoundComplete(saved.lastSolvedProblemId, '');
+            showRoundComplete(savedLastProblemId, '');
             if (lastSolvedProblem) {
                 els.problemDisplayMessage.textContent = `${lastSolvedProblem.label} まで完了しています。`;
             }
             return true;
         }
 
-        const hasProblem = problemData[saved.round].some(problem => problem.id === saved.problemId);
+        const savedProblemId = normalizeProblemId(saved.problemId);
+        const hasProblem = problemData[saved.round].some(problem => problem.id === savedProblemId);
         if (!hasProblem) return false;
 
-        selectProblem(saved.round, saved.problemId);
+        selectProblem(saved.round, savedProblemId);
         return true;
     } catch (e) {
         console.error('Failed to restore problem progress', e);
@@ -789,8 +846,19 @@ function restoreProblemProgress() {
 function selectStartProblemForRound(round) {
     if (!round || !problemData[round] || problemData[round].length === 0) return;
 
-    const startProblem = getProblemBySuffix(round, '011') || problemData[round][0];
+    const startProblem = getStartProblemForRound(round) || problemData[round][0];
     selectProblem(round, startProblem.id);
+}
+
+function getStartProblemForRound(round) {
+    const roundNumber = extractRoundNumber(round);
+    const roundPart = roundNumber >= 0 ? String(roundNumber).padStart(2, '0') : '';
+    if (roundPart) {
+        const expectedEnd = `${roundPart}011`;
+        const roundMatchedProblem = problemData[round].find(problem => normalizeProblemId(problem.id).endsWith(expectedEnd));
+        if (roundMatchedProblem) return roundMatchedProblem;
+    }
+    return getProblemBySuffix(round, '011');
 }
 
 function getFlowNextProblemId(round, problemId, badgeText) {
@@ -807,7 +875,7 @@ function getFlowNextProblemId(round, problemId, badgeText) {
 
 function getProblemBySuffix(round, suffix) {
     if (!round || !problemData[round]) return null;
-    return problemData[round].find(problem => String(problem.id || '').endsWith(suffix)) || null;
+    return problemData[round].find(problem => normalizeProblemId(problem.id).endsWith(suffix)) || null;
 }
 
 function showRoundComplete(problemId, badgeText) {
@@ -818,21 +886,28 @@ function showRoundComplete(problemId, badgeText) {
     els.problemDisplayMessage.textContent = '本日のまとめで解き直し問題を確認できます。';
     els.problemDisplay.classList.remove('hidden');
     if (String(problemId || '').endsWith('043')) {
-        openUraMode();
+        openUraMode(isFinalProblemPassed(problemId, badgeText));
     }
 }
 
-function openUraMode() {
+function isFinalProblemPassed(problemId, badgeText) {
+    return String(problemId || '').endsWith('043') && String(badgeText || '').includes('レベルアップ');
+}
+
+function openUraMode(isCongratulations = false) {
     const round = els.roundSelect.value;
     if (!round || !problemData[round]) return;
 
     populateProblemSelect(round);
     setUraModeVisible(true);
     setProblemPickerVisible(true);
-    els.problemDisplayLabel.textContent = '裏モード開放！';
+    els.uraModeBanner.classList.toggle('congratulations', isCongratulations);
+    els.uraModeBanner.textContent = isCongratulations ? 'Congratulations！ 裏モード開放！' : '裏モード開放！';
+    els.problemDisplay.classList.toggle('congratulations', isCongratulations);
+    els.problemDisplayLabel.textContent = isCongratulations ? 'Congratulations！' : '裏モード開放！';
     els.problemDisplayMessage.textContent = 'この回のすべての問題を選んで復習できます。';
     els.problemDisplay.classList.remove('hidden');
-    setTimeout(() => alert('裏モード開放！'), 0);
+    setTimeout(() => alert(isCongratulations ? 'Congratulations！ 裏モード開放！' : '裏モード開放！'), 0);
 }
 
 function selectProblem(round, problemId) {

@@ -70,6 +70,14 @@ body {
     color: var(--text-secondary);
 }
 
+.achievement-stars {
+    color: #f59e0b;
+    font-size: 1rem;
+    letter-spacing: 0;
+    margin-right: 4px;
+    word-break: break-all;
+}
+
 /* ボタン共通 */
 button {
     font-family: inherit;
@@ -113,6 +121,20 @@ button:disabled {
     margin-bottom: 10px;
     padding: 10px 12px;
     text-align: center;
+}
+
+.ura-mode-banner.congratulations {
+    background: #fce7f3;
+    border-color: #ec4899;
+    color: #9d174d;
+    font-size: 1.15rem;
+}
+
+.problem-display.congratulations {
+    background: #fdf2f8;
+    border: 2px solid #f9a8d4;
+    border-radius: var(--radius-lg);
+    padding: 18px;
 }
 
 .start-other-test-btn {

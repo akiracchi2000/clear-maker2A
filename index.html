@@ -11,13 +11,13 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
-    <link rel="stylesheet" href="student.css?v=1.4.53">
+    <link rel="stylesheet" href="student.css?v=1.4.54">
 </head>
 <body>
     <header class="app-header" style="align-items: center;">
         <div style="display: flex; align-items: baseline; gap: 8px;">
             <h1>Clear Maker 2A</h1>
-            <span style="font-size: 0.9rem; color: rgba(255, 255, 255, 0.8); font-weight: 600;">v1.4.53</span>
+            <span style="font-size: 0.9rem; color: rgba(255, 255, 255, 0.8); font-weight: 600;">v1.4.54</span>
         </div>
         <button id="settings-btn" class="icon-btn" type="button" aria-label="設定">⚙</button>
     </header>
@@ -36,7 +36,7 @@
         </div>
 
         <div id="user-info" class="user-info hidden">
-            <span>生徒: </span><strong id="display-student-id"></strong>
+            <span>生徒: </span><span id="achievement-stars" class="achievement-stars"></span><strong id="display-student-id"></strong>
         </div>
 
         <div id="result-section" class="result-section hidden">
@@ -122,6 +122,6 @@
     </div>
 
     <canvas id="camera-canvas" style="display: none;"></canvas>
-    <script src="student.js?v=1.4.53"></script>
+    <script src="student.js?v=1.4.54"></script>
 </body>
 </html>
