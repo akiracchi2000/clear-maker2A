@@ -40,6 +40,7 @@ const els = {
     userInfo: document.getElementById('user-info'),
     displayStudentId: document.getElementById('display-student-id'),
     settingsBtn: document.getElementById('settings-btn'),
+    adminCheckBtn: document.getElementById('admin-check-btn'),
 
     cameraInput: document.getElementById('camera-input'),
     uploadBtn: document.getElementById('upload-btn'),
@@ -85,6 +86,7 @@ function init() {
     }
 
     setupEventListeners();
+    updateAdminCheckButton();
     fetchAndSetupProblems();
 }
 
@@ -126,6 +128,60 @@ function updateUserInfo() {
     updateAchievementStars();
     els.displayStudentId.textContent = state.studentId;
     els.userInfo.classList.remove('hidden');
+    updateAdminCheckButton();
+}
+
+function isAdminMode() {
+    const params = new URLSearchParams(window.location.search);
+    const id = String(state.studentId || "").trim().toLowerCase();
+    return params.get('admin') === '1' || ['admin', 'teacher', 'sensei', '管理者', '先生'].includes(id);
+}
+
+function updateAdminCheckButton() {
+    if (!els.adminCheckBtn) return;
+    els.adminCheckBtn.classList.toggle('hidden', !isAdminMode());
+}
+
+async function validateSpreadsheetFromAdminButton() {
+    if (!isAdminMode()) return;
+
+    const adminCode = window.prompt('管理者確認コードを入力してください。');
+    if (!adminCode) return;
+
+    const originalText = els.adminCheckBtn.textContent;
+    els.adminCheckBtn.disabled = true;
+    els.adminCheckBtn.textContent = '確認中';
+
+    try {
+        const response = await fetch(GAS_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'validateSpreadsheet', adminCode }),
+        });
+        const json = await response.json();
+        const validation = json.validation || {};
+        const errors = validation.errors || [];
+        const warnings = validation.warnings || [];
+
+        if (json.status === 'success') {
+            const message = [
+                'チェックOKです。',
+                `問題リスト: ${validation.problemSheetName || '一番左のシート'}`,
+                `有効な問題数: ${validation.problemCount || 0}`,
+                warnings.length ? `注意:\n${warnings.join('\n')}` : ''
+            ].filter(Boolean).join('\n');
+            alert(message);
+        } else {
+            const message = json.error || (errors.length ? errors.join('\n') : 'チェックに失敗しました。');
+            alert(message);
+        }
+    } catch (e) {
+        console.error(e);
+        alert(`チェックに失敗しました。通信状況やGASの設定を確認してください。\n${e.message || e}`);
+    } finally {
+        els.adminCheckBtn.disabled = false;
+        els.adminCheckBtn.textContent = originalText;
+    }
 }
 
 function getAchievementStorageKey() {
@@ -313,6 +369,7 @@ function setupEventListeners() {
         state.studentId = id;
         localStorage.setItem('student_id', id);
         updateUserInfo();
+        updateAdminCheckButton();
         els.setupModal.classList.add('hidden');
         restoreProblemProgress();
     });
@@ -335,6 +392,9 @@ function setupEventListeners() {
     els.cameraCloseBtn.addEventListener('click', stopCamera);
     els.evaluateBtn.addEventListener('click', evaluateAnswer);
     els.todaySummaryBtn.addEventListener('click', showTodaySummary);
+    if (els.adminCheckBtn) {
+        els.adminCheckBtn.addEventListener('click', validateSpreadsheetFromAdminButton);
+    }
 
     els.clearAllBtn.addEventListener('click', () => {
         state.images = [];
@@ -573,6 +633,7 @@ async function evaluateAnswer() {
 
 問題が一致している場合は、生徒の解答を添削してください。
 合格判定は、解答した問題数の8割以上が正解なら「レベルアップして次の問題へ！」、それ以外なら「同じレベルの次の問題へ！」としてください。
+未回答・空欄・答えが書かれていない小問・読み取れない小問は、すべて不正解として総問題数に含めてください。例えば5問中2問正解で3問未回答なら、2問中2問正解ではなく5問中2問正解として不合格です。
 生徒が途中式から書き始めている場合も、計算過程として正しければ正解として扱ってください。
 雑談や無関係な話題は省略してください。
 
@@ -584,6 +645,7 @@ async function evaluateAnswer() {
 結果: 例 5問中4問正解
 読み取った解答と正誤:
 各問題について、途中式や解説は省き、答えと正誤のみを書いてください。
+未回答の小問も省略せず、「未回答: 不正解」と書いてください。
 形式例:
 (1) 正解: [答え]
 (2) 不正解: [答え]
@@ -626,10 +688,13 @@ async function evaluateAnswer() {
             throw new Error(data.error);
         }
 
-        const aiResponse = data.candidates[0].content.parts[0].text;
+        const aiResponse = getAiResponseText(data);
         const badgeText = displayResult(aiResponse);
         if (badgeText) {
-            await saveResultWithRetry(aiResponse, problemId);
+            saveResultWithRetry(aiResponse, problemId).catch(error => {
+                console.error('Failed to save result after grading', error);
+                showSaveWarning(error);
+            });
             selectNextProblemByResult(badgeText);
         }
     } catch (err) {
@@ -640,6 +705,26 @@ async function evaluateAnswer() {
         els.loadingIndicator.classList.add('hidden');
         els.evaluateBtn.disabled = false;
     }
+}
+
+function getAiResponseText(data) {
+    const text = data &&
+        data.candidates &&
+        data.candidates[0] &&
+        data.candidates[0].content &&
+        data.candidates[0].content.parts &&
+        data.candidates[0].content.parts[0] &&
+        data.candidates[0].content.parts[0].text;
+
+    if (text) return text;
+
+    const finishReason = data &&
+        data.candidates &&
+        data.candidates[0] &&
+        data.candidates[0].finishReason;
+    throw new Error(finishReason
+        ? `AIの添削結果を取得できませんでした。理由: ${finishReason}`
+        : 'AIの添削結果を取得できませんでした。');
 }
 
 function displayResult(text) {
@@ -682,6 +767,14 @@ function displayResult(text) {
     clearMismatchMessage();
     clearTodaySummary();
     return badgeText;
+}
+
+function showSaveWarning(error) {
+    if (!els.resultContent) return;
+    const warning = document.createElement('div');
+    warning.className = 'save-warning';
+    warning.textContent = `添削結果の表示と次の問題への移動は完了しましたが、提出履歴への保存に失敗しました。先生にこの画面を見せてください。${error && error.message ? ` (${error.message})` : ''}`;
+    els.resultContent.prepend(warning);
 }
 
 function normalizeResultMarkdown(text) {
