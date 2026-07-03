@@ -1,6 +1,5 @@
-const CACHE_NAME = 'clear-maker-2a-v1.4.60';
+const CACHE_NAME = 'clear-maker-2a-v1.4.60-r2';
 const APP_ASSETS = [
-    './',
     './index.html',
     './student.css?v=1.4.60',
     './student.js?v=1.4.60',
@@ -9,7 +8,11 @@ const APP_ASSETS = [
 self.addEventListener('install', event => {
     self.skipWaiting();
     event.waitUntil(
-        caches.open(CACHE_NAME).then(cache => cache.addAll(APP_ASSETS))
+        caches.open(CACHE_NAME).then(cache =>
+            Promise.allSettled(
+                APP_ASSETS.map(asset => cache.add(asset))
+            )
+        )
     );
 });
 
@@ -22,6 +25,10 @@ self.addEventListener('activate', event => {
                     .map(name => caches.delete(name))
             ))
             .then(() => self.clients.claim())
+            .then(() => self.clients.matchAll({ type: 'window' }))
+            .then(clients => Promise.all(
+                clients.map(client => client.navigate(client.url))
+            ))
     );
 });
 
