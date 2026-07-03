@@ -785,9 +785,13 @@ function setProblemVisibleFromResult(isVisible) {
     els.toggleProblemBtn.textContent = isVisible ? '問題を隠す' : '問題を表示する';
 }
 
-function toggleProblemFromResult() {
+async function toggleProblemFromResult() {
     if (!els.problemSection) return;
-    setProblemVisibleFromResult(els.problemSection.classList.contains('hidden'));
+    const shouldShow = els.problemSection.classList.contains('hidden');
+    setProblemVisibleFromResult(shouldShow);
+    if (shouldShow && getSelectedProblem()) {
+        await renderSelectedProblem();
+    }
 }
 
 function showSaveWarning(error) {
