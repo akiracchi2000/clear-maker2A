@@ -27,6 +27,7 @@ const els = {
     setupModal: document.getElementById('setup-modal'),
     studentIdInput: document.getElementById('student-id'),
     problemPicker: document.getElementById('problem-picker'),
+    problemSection: document.getElementById('problem-section'),
     roundSelect: document.getElementById('round-select'),
     problemSelect: document.getElementById('problem-select'),
     problemDisplay: document.getElementById('problem-display'),
@@ -56,6 +57,7 @@ const els = {
     resultSection: document.getElementById('result-section'),
     resultBadge: document.getElementById('result-badge'),
     resultContent: document.getElementById('result-content'),
+    toggleProblemBtn: document.getElementById('toggle-problem-btn'),
     todaySummaryBtn: document.getElementById('today-summary-btn'),
     todaySummarySection: document.getElementById('today-summary-section'),
     todaySummaryCauses: document.getElementById('today-summary-causes'),
@@ -391,6 +393,7 @@ function setupEventListeners() {
     els.cameraSwitchBtn.addEventListener('click', switchCamera);
     els.cameraCloseBtn.addEventListener('click', stopCamera);
     els.evaluateBtn.addEventListener('click', evaluateAnswer);
+    els.toggleProblemBtn.addEventListener('click', toggleProblemFromResult);
     els.todaySummaryBtn.addEventListener('click', showTodaySummary);
     if (els.adminCheckBtn) {
         els.adminCheckBtn.addEventListener('click', validateSpreadsheetFromAdminButton);
@@ -433,6 +436,7 @@ function setupEventListeners() {
         renderThumbnails();
         els.resultSection.classList.add('hidden');
         clearTodaySummary();
+        setProblemVisibleFromResult(true);
         setProblemPickerVisible(true);
     });
 
@@ -440,6 +444,7 @@ function setupEventListeners() {
 }
 
 function renderThumbnails() {
+    const wasShowingResult = !els.resultSection.classList.contains('hidden');
     els.imagePreviewList.innerHTML = '';
 
     if (state.images.length === 0) {
@@ -474,6 +479,9 @@ function renderThumbnails() {
     els.previewContainer.classList.remove('hidden');
     els.evaluateBtn.classList.remove('hidden');
     els.resultSection.classList.add('hidden');
+    if (wasShowingResult) {
+        setProblemVisibleFromResult(true);
+    }
 }
 
 async function readFile(file) {
@@ -764,9 +772,22 @@ function displayResult(text) {
     renderMath(els.resultContent);
 
     els.resultSection.classList.remove('hidden');
+    setProblemVisibleFromResult(false);
     clearMismatchMessage();
     clearTodaySummary();
     return badgeText;
+}
+
+function setProblemVisibleFromResult(isVisible) {
+    if (!els.problemSection || !els.toggleProblemBtn) return;
+    els.problemSection.classList.toggle('hidden', !isVisible);
+    els.toggleProblemBtn.setAttribute('aria-expanded', String(isVisible));
+    els.toggleProblemBtn.textContent = isVisible ? '問題を隠す' : '問題を表示する';
+}
+
+function toggleProblemFromResult() {
+    if (!els.problemSection) return;
+    setProblemVisibleFromResult(els.problemSection.classList.contains('hidden'));
 }
 
 function showSaveWarning(error) {

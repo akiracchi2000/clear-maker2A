@@ -354,11 +354,32 @@ button:disabled {
     text-align: center;
 }
 
-.result-details h3 {
-    font-size: 1.1rem;
+.result-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
     margin-bottom: 12px;
     border-bottom: 2px solid var(--border-color);
     padding-bottom: 8px;
+}
+
+.result-heading h3 {
+    font-size: 1.1rem;
+}
+
+.result-problem-toggle {
+    flex-shrink: 0;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    color: var(--primary-color);
+    padding: 7px 11px;
+    font-size: 0.85rem;
+}
+
+.result-problem-toggle:hover {
+    background: #eff6ff;
+    border-color: #bfdbfe;
 }
 
 .markdown-body {

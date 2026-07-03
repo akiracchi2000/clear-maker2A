@@ -11,13 +11,13 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
-    <link rel="stylesheet" href="student.css?v=1.4.57">
+    <link rel="stylesheet" href="student.css?v=1.4.58">
 </head>
 <body>
     <header class="app-header" style="align-items: center;">
         <div style="display: flex; align-items: baseline; gap: 8px;">
             <h1>Clear Maker 2A</h1>
-            <span style="font-size: 0.9rem; color: rgba(255, 255, 255, 0.8); font-weight: 600;">v1.4.57</span>
+            <span style="font-size: 0.9rem; color: rgba(255, 255, 255, 0.8); font-weight: 600;">v1.4.58</span>
         </div>
         <div class="header-actions">
             <button id="admin-check-btn" class="header-check-btn hidden" type="button">確認</button>
@@ -45,7 +45,10 @@
         <div id="result-section" class="result-section hidden">
             <div id="result-badge" class="result-badge"></div>
             <div class="result-details">
-                <h3>添削結果</h3>
+                <div class="result-heading">
+                    <h3>添削結果</h3>
+                    <button id="toggle-problem-btn" class="result-problem-toggle" type="button" aria-expanded="false" aria-controls="problem-section">問題を表示する</button>
+                </div>
                 <div id="result-content" class="markdown-body"></div>
             </div>
             <button id="today-summary-btn" class="primary-btn" style="margin-top: 20px; width: 100%;" type="button">本日のまとめを表示する</button>
@@ -58,7 +61,7 @@
             <button id="new-question-btn" class="secondary-btn" style="margin-top: 20px; width: 100%;" type="button">別の問題を添削する</button>
         </div>
 
-        <div class="problem-section" style="background: var(--bg-secondary); padding: 20px; border-radius: var(--radius-lg); margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+        <div id="problem-section" class="problem-section" style="background: var(--bg-secondary); padding: 20px; border-radius: var(--radius-lg); margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
             <div id="problem-picker" class="problem-picker">
                 <label style="font-weight: 600; display: block; margin-bottom: 8px;">解答する問題</label>
                 <div id="ura-mode-banner" class="ura-mode-banner hidden">裏モード開放！</div>
@@ -125,6 +128,6 @@
     </div>
 
     <canvas id="camera-canvas" style="display: none;"></canvas>
-    <script src="student.js?v=1.4.57"></script>
+    <script src="student.js?v=1.4.58"></script>
 </body>
 </html>
