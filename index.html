@@ -129,5 +129,14 @@
 
     <canvas id="camera-canvas" style="display: none;"></canvas>
     <script src="student.js?v=1.4.58"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js?v=1.4.58', { updateViaCache: 'none' })
+                    .then(registration => registration.update())
+                    .catch(error => console.error('Service Worker registration failed:', error));
+            });
+        }
+    </script>
 </body>
 </html>
