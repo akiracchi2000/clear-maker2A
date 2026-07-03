@@ -5,6 +5,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbwT8ED1qE-4gqRGM-y4
 let state = {
     studentId: '',
     images: [],
+    gradedProblem: null,
 };
 let problemData = {};
 const PROGRESS_STORAGE_PREFIX = 'student_problem_progress_';
@@ -58,6 +59,10 @@ const els = {
     resultBadge: document.getElementById('result-badge'),
     resultContent: document.getElementById('result-content'),
     toggleProblemBtn: document.getElementById('toggle-problem-btn'),
+    gradedProblemDisplay: document.getElementById('graded-problem-display'),
+    gradedProblemLabel: document.getElementById('graded-problem-label'),
+    gradedProblemImage: document.getElementById('graded-problem-image'),
+    gradedProblemMessage: document.getElementById('graded-problem-message'),
     todaySummaryBtn: document.getElementById('today-summary-btn'),
     todaySummarySection: document.getElementById('today-summary-section'),
     todaySummaryCauses: document.getElementById('today-summary-causes'),
@@ -436,7 +441,7 @@ function setupEventListeners() {
         renderThumbnails();
         els.resultSection.classList.add('hidden');
         clearTodaySummary();
-        setProblemVisibleFromResult(true);
+        hideGradedProblem();
         setProblemPickerVisible(true);
     });
 
@@ -444,7 +449,6 @@ function setupEventListeners() {
 }
 
 function renderThumbnails() {
-    const wasShowingResult = !els.resultSection.classList.contains('hidden');
     els.imagePreviewList.innerHTML = '';
 
     if (state.images.length === 0) {
@@ -479,9 +483,6 @@ function renderThumbnails() {
     els.previewContainer.classList.remove('hidden');
     els.evaluateBtn.classList.remove('hidden');
     els.resultSection.classList.add('hidden');
-    if (wasShowingResult) {
-        setProblemVisibleFromResult(true);
-    }
 }
 
 async function readFile(file) {
@@ -618,6 +619,7 @@ async function evaluateAnswer() {
     }
 
     const problemId = els.problemSelect.value;
+    const gradedProblem = getSelectedProblem();
     if (!problemId) {
         alert('回と問題を選択してください。');
         return;
@@ -697,6 +699,7 @@ async function evaluateAnswer() {
         }
 
         const aiResponse = getAiResponseText(data);
+        state.gradedProblem = gradedProblem;
         const badgeText = displayResult(aiResponse);
         if (badgeText) {
             saveResultWithRetry(aiResponse, problemId).catch(error => {
@@ -772,25 +775,59 @@ function displayResult(text) {
     renderMath(els.resultContent);
 
     els.resultSection.classList.remove('hidden');
-    setProblemVisibleFromResult(false);
+    hideGradedProblem();
     clearMismatchMessage();
     clearTodaySummary();
     return badgeText;
 }
 
-function setProblemVisibleFromResult(isVisible) {
-    if (!els.problemSection || !els.toggleProblemBtn) return;
-    els.problemSection.classList.toggle('hidden', !isVisible);
-    els.toggleProblemBtn.setAttribute('aria-expanded', String(isVisible));
-    els.toggleProblemBtn.textContent = isVisible ? '問題を隠す' : '問題を表示する';
+async function toggleProblemFromResult() {
+    if (!els.gradedProblemDisplay) return;
+    const shouldShow = els.gradedProblemDisplay.classList.contains('hidden');
+    if (!shouldShow) {
+        hideGradedProblem();
+        return;
+    }
+    await showGradedProblem();
 }
 
-async function toggleProblemFromResult() {
-    if (!els.problemSection) return;
-    const shouldShow = els.problemSection.classList.contains('hidden');
-    setProblemVisibleFromResult(shouldShow);
-    if (shouldShow && getSelectedProblem()) {
-        await renderSelectedProblem();
+function hideGradedProblem() {
+    els.gradedProblemDisplay.classList.add('hidden');
+    els.toggleProblemBtn.setAttribute('aria-expanded', 'false');
+    els.toggleProblemBtn.textContent = '問題を表示する';
+}
+
+async function showGradedProblem() {
+    const problem = state.gradedProblem;
+    if (!problem) return;
+
+    els.gradedProblemDisplay.classList.remove('hidden');
+    els.toggleProblemBtn.setAttribute('aria-expanded', 'true');
+    els.toggleProblemBtn.textContent = '問題を隠す';
+    els.gradedProblemLabel.textContent = `${problem.label} (${problem.id})`;
+    els.gradedProblemImage.removeAttribute('src');
+    els.gradedProblemMessage.textContent = '問題画像を読み込んでいます...';
+
+    try {
+        const imageData = await fetchProblemImage(problem.id);
+        if (els.gradedProblemDisplay.classList.contains('hidden')) return;
+        if (imageData) {
+            els.gradedProblemImage.src = imageData;
+            els.gradedProblemMessage.textContent = '';
+        } else if (problem.imageUrl) {
+            els.gradedProblemImage.src = problem.imageUrl;
+            els.gradedProblemMessage.textContent = '';
+        } else {
+            els.gradedProblemMessage.textContent = '問題画像が見つかりません。';
+        }
+    } catch (error) {
+        console.error(error);
+        if (problem.imageUrl) {
+            els.gradedProblemImage.src = problem.imageUrl;
+            els.gradedProblemMessage.textContent = '';
+        } else {
+            els.gradedProblemMessage.textContent = '問題画像を読み込めませんでした。';
+        }
     }
 }
 

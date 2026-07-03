@@ -11,13 +11,13 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
-    <link rel="stylesheet" href="student.css?v=1.4.59">
+    <link rel="stylesheet" href="student.css?v=1.4.60">
 </head>
 <body>
     <header class="app-header" style="align-items: center;">
         <div style="display: flex; align-items: baseline; gap: 8px;">
             <h1>Clear Maker 2A</h1>
-            <span style="font-size: 0.9rem; color: rgba(255, 255, 255, 0.8); font-weight: 600;">v1.4.59</span>
+            <span style="font-size: 0.9rem; color: rgba(255, 255, 255, 0.8); font-weight: 600;">v1.4.60</span>
         </div>
         <div class="header-actions">
             <button id="admin-check-btn" class="header-check-btn hidden" type="button">確認</button>
@@ -47,7 +47,12 @@
             <div class="result-details">
                 <div class="result-heading">
                     <h3>添削結果</h3>
-                    <button id="toggle-problem-btn" class="result-problem-toggle" type="button" aria-expanded="false" aria-controls="problem-section">問題を表示する</button>
+                    <button id="toggle-problem-btn" class="result-problem-toggle" type="button" aria-expanded="false" aria-controls="graded-problem-display">問題を表示する</button>
+                </div>
+                <div id="graded-problem-display" class="graded-problem-display hidden">
+                    <div id="graded-problem-label" class="problem-display-label"></div>
+                    <img id="graded-problem-image" class="problem-display-image" alt="添削した問題画像">
+                    <div id="graded-problem-message" class="problem-display-message"></div>
                 </div>
                 <div id="result-content" class="markdown-body"></div>
             </div>
@@ -128,11 +133,11 @@
     </div>
 
     <canvas id="camera-canvas" style="display: none;"></canvas>
-    <script src="student.js?v=1.4.59"></script>
+    <script src="student.js?v=1.4.60"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js?v=1.4.59', { updateViaCache: 'none' })
+                navigator.serviceWorker.register('./sw.js?v=1.4.60', { updateViaCache: 'none' })
                     .then(registration => registration.update())
                     .catch(error => console.error('Service Worker registration failed:', error));
             });
