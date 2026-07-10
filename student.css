@@ -470,6 +470,10 @@ button:disabled {
     display: none;
 }
 
+#problem-select.is-visible {
+    display: block;
+}
+
 .problem-display-label {
     color: var(--primary-color);
     font-size: 0.95rem;

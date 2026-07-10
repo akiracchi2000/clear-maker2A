@@ -11,13 +11,13 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
-    <link rel="stylesheet" href="student.css?v=1.4.60">
+    <link rel="stylesheet" href="student.css?v=1.4.62">
 </head>
 <body>
     <header class="app-header" style="align-items: center;">
         <div style="display: flex; align-items: baseline; gap: 8px;">
             <h1>Clear Maker 2A</h1>
-            <span style="font-size: 0.9rem; color: rgba(255, 255, 255, 0.8); font-weight: 600;">v1.4.60</span>
+            <span style="font-size: 0.9rem; color: rgba(255, 255, 255, 0.8); font-weight: 600;">v1.4.62</span>
         </div>
         <div class="header-actions">
             <button id="admin-check-btn" class="header-check-btn hidden" type="button">確認</button>
@@ -133,7 +133,7 @@
     </div>
 
     <canvas id="camera-canvas" style="display: none;"></canvas>
-    <script src="student.js?v=1.4.60"></script>
+    <script src="student.js?v=1.4.62"></script>
     <script>
         if ('serviceWorker' in navigator) {
             let reloadingForUpdate = false;
@@ -143,7 +143,7 @@
                 window.location.reload();
             });
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js?v=1.4.60-r2', { updateViaCache: 'none' })
+                navigator.serviceWorker.register('./sw.js?v=1.4.62', { updateViaCache: 'none' })
                     .then(registration => {
                         registration.update();
                         window.setInterval(() => registration.update(), 60 * 60 * 1000);

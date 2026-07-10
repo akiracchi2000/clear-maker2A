@@ -336,11 +336,15 @@ function setProblemPickerVisible(isVisible) {
 
 function setUraModeVisible(isVisible) {
     els.uraModeBanner.classList.toggle('hidden', !isVisible);
+    els.problemSelect.classList.toggle('is-visible', isVisible);
     if (!isVisible) {
         els.uraModeBanner.classList.remove('congratulations');
         els.uraModeBanner.textContent = '裏モード開放！';
     }
     els.roundSelect.disabled = isVisible;
+    if (isVisible && els.roundSelect.value && problemData[els.roundSelect.value]) {
+        els.problemSelect.disabled = false;
+    }
 }
 
 function setupEventListeners() {
@@ -398,7 +402,9 @@ function setupEventListeners() {
     els.cameraSwitchBtn.addEventListener('click', switchCamera);
     els.cameraCloseBtn.addEventListener('click', stopCamera);
     els.evaluateBtn.addEventListener('click', evaluateAnswer);
-    els.toggleProblemBtn.addEventListener('click', toggleProblemFromResult);
+    if (els.toggleProblemBtn) {
+        els.toggleProblemBtn.addEventListener('click', toggleProblemFromResult);
+    }
     els.todaySummaryBtn.addEventListener('click', showTodaySummary);
     if (els.adminCheckBtn) {
         els.adminCheckBtn.addEventListener('click', validateSpreadsheetFromAdminButton);
@@ -792,6 +798,7 @@ async function toggleProblemFromResult() {
 }
 
 function hideGradedProblem() {
+    if (!els.gradedProblemDisplay || !els.toggleProblemBtn) return;
     els.gradedProblemDisplay.classList.add('hidden');
     els.toggleProblemBtn.setAttribute('aria-expanded', 'false');
     els.toggleProblemBtn.textContent = '問題を表示する';
@@ -799,7 +806,14 @@ function hideGradedProblem() {
 
 async function showGradedProblem() {
     const problem = state.gradedProblem;
-    if (!problem) return;
+    if (
+        !problem ||
+        !els.gradedProblemDisplay ||
+        !els.toggleProblemBtn ||
+        !els.gradedProblemLabel ||
+        !els.gradedProblemImage ||
+        !els.gradedProblemMessage
+    ) return;
 
     els.gradedProblemDisplay.classList.remove('hidden');
     els.toggleProblemBtn.setAttribute('aria-expanded', 'true');
