@@ -28,6 +28,7 @@ const els = {
     setupModal: document.getElementById('setup-modal'),
     studentIdInput: document.getElementById('student-id'),
     problemPicker: document.getElementById('problem-picker'),
+    problemPickerHelp: document.getElementById('problem-picker-help'),
     problemSection: document.getElementById('problem-section'),
     roundSelect: document.getElementById('round-select'),
     problemSelect: document.getElementById('problem-select'),
@@ -337,6 +338,9 @@ function setProblemPickerVisible(isVisible) {
 function setUraModeVisible(isVisible) {
     els.uraModeBanner.classList.toggle('hidden', !isVisible);
     els.problemSelect.classList.toggle('is-visible', isVisible);
+    if (els.problemPickerHelp) {
+        els.problemPickerHelp.classList.toggle('hidden', isVisible);
+    }
     if (!isVisible) {
         els.uraModeBanner.classList.remove('congratulations');
         els.uraModeBanner.textContent = '裏モード開放！';
